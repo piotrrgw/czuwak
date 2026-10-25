@@ -4,4 +4,6 @@
     <string name="title_activity_main">Czuwak</string>
     <string name="package_name">pl.pkp.czuwak</string>
     <string name="custom_url_scheme">pl.pkp.czuwak</string>
+    <string name="widget_name">Czuwak – Status pociągu</string>
+    <string name="widget_description">Podgląd najbliższej stacji, odległości, ETA, prędkości i opóźnienia na ekranie głównym telefonu</string>
 </resources>

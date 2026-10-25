@@ -14,9 +14,10 @@
    - Ręczny wybór daty wyjazdu pociągu (**Wczoraj | Dzisiaj | Jutro** lub dowolna data z kalendarza).
    - Wyszukiwanie pociągu po **numerze** (z obsługą parzystego/nieparzystego kierunku relacji) lub **nazwie** oraz historia **5 ostatnich pociągów**.
    - Konfiguracja odcinka obsługi DK: stacja objęcia składu oraz stacja zmiany DK z automatycznym uśpieniem Czuwaka po zdaniu pociągu.
-3. **Karta Hero HUD, Pływający Mini-Widget i Widget Ekranu Blokady:**
+3. **Karta Hero HUD, Pływający Mini-HUD i Widgety (Ekran Główny + Ekran Blokady):**
    - **Hero HUD „Następna stacja”:** Wyróżniona karta nad tabelą trasy z nazwą stacji, odległością w czasie rzeczywistym, wyliczonym ETA, statusem (stacja pośrednia vs stacja zmiany DK) oraz przyciskami szybkiego odhaczenia, centrowania mapy i ustawiania opóźnienia.
-   - **Pływający Mini-HUD:** Dyskretny pasek pojawiający się podczas przewijania rozkładu jazdy w dół ekranu, zapewniający ciągły podgląd następnej stacji i odległości.
+   - **Pływający Mini-HUD (Top Sticky Dynamic Island):** Dyskretny pasek pojawiający się u góry ekranu (`top: 12px`) podczas przewijania rozkładu jazdy w dół, zapewniający ciągły podgląd następnej stacji bez zasłaniania dolnych przycisków akcji (FAB) i prędkościomierza.
+   - **Natywny Widget na Ekran Główny Androida (AppWidget):** Widget pulpitu Androida pozwalający śledzić na bieżąco numer pociągu, relację, najbliższą stację, odległość w km, rozkładowy przyjazd, prędkość oraz opóźnienie. Dotknięcie widgetu natychmiast otwiera aplikację z aktywnym pociągiem.
    - **Widget na ekranie blokady (MediaSession):** Prezentacja numeru pociągu, relacji, najbliższej stacji, odległości i prognozowanego opóźnienia bezpośrednio na zablokowanym ekranie telefonu bez konieczności odblokowywania.
 4. **Zarządzanie opóźnieniami i rejestracja postojów:**
    - **One-Tap Delay Bottom Sheet:** Ergonomiczny panel dolny z kafelkami szybkiego wyboru opóźnień (`[Plan]`, `[+3]`, `[+5]`, `[+10]`, `[+15]`, `[+20]`, `[+30]`, `[+45]`, `[+60]` oraz `[-5m]`, `[-1m]`, `[+1m]`, `[+5m]`) zastępujący uciążliwe okna systemowe.

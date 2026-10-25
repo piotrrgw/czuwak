@@ -701,6 +701,25 @@ window.completeCrewDutyAndStopCzuwak = (stationName, reasonText = '') => {
             '\x3C/div\x3E';
     }
 
+    try {
+        if (window.CzuwakNativeWidget && typeof window.CzuwakNativeWidget.updateWidget === 'function') {
+            const trNum = window._currentActiveTrainNumber || '';
+            const trName = (window._currentTrainObject && window._currentTrainObject.nazwa) ? (' ' + window._currentTrainObject.nazwa) : '';
+            window.CzuwakNativeWidget.updateWidget(
+                (trNum + trName).trim() || 'Poci\u0105g',
+                'Koniec s\u0142u\u017cby DK',
+                '0.0 km',
+                'Zdano sk\u0142ad: ' + (stationName || ''),
+                'Czuwak OFF',
+                '0 km/h',
+                'Zako\u0144czono: ' + (stationName || '')
+            );
+        }
+    } catch (e) {}
+
+    const miniHud = document.getElementById('floatingMiniHud');
+    if (miniHud) miniHud.style.display = 'none';
+
     fireNativeOrWebNotification(
         'Koniec odcinka obsługi DK: ' + (stationName || ''),
         'Stacja zmiany DK została odhaczona. Czuwak wyłączył się automatycznie.',
@@ -2302,6 +2321,15 @@ window.closeActiveTrainAndSleep = () => {
     const mainBox = document.getElementById('mainStatusBox');
     if (mainBox) mainBox.style.display = 'none';
 
+    const miniHud = document.getElementById('floatingMiniHud');
+    if (miniHud) miniHud.style.display = 'none';
+
+    try {
+        if (window.CzuwakNativeWidget && typeof window.CzuwakNativeWidget.clearWidget === 'function') {
+            window.CzuwakNativeWidget.clearWidget();
+        }
+    } catch (e) {}
+
     window.expandTrainConfigPanel();
     window.updateSpeedAndGpsIndicator(0, 'idle', 'U\u015bpiony');
     window.renderSleepState();
@@ -3731,6 +3759,42 @@ window.updateNextStationHud = (hudData) => {
             });
         } catch (e) {}
     }
+
+    // Natywny widget Androida (Ekran Główny AppWidget)
+    window.syncNativeAppWidget(hudData);
+};
+
+window.syncNativeAppWidget = (hudData) => {
+    if (!window.CzuwakNativeWidget || typeof window.CzuwakNativeWidget.updateWidget !== 'function') return;
+    if (!window._currentTrainObject) return;
+    try {
+        const data = hudData || window._lastNextStationHudData || {};
+        const trNum = window._currentActiveTrainNumber || '';
+        const trName = window._currentTrainObject.nazwa ? (' ' + window._currentTrainObject.nazwa) : '';
+        const trainInfo = (trNum + trName).trim() || 'Pociąg';
+        const stName = data.name || '';
+        const isStationStop = !!data.isStationStop;
+        const nextPrefix = isStationStop ? 'Postój: ' : '\u2794 ';
+        const nextStation = nextPrefix + stName;
+        const distKm = data.distKm;
+        const distStr = (typeof distKm === 'number') ? ('~' + distKm.toFixed(1) + ' km') : (data.distStr || '-- km');
+        const schedArr = data.schedArr || '';
+        const delayedArr = data.delayedArr || '';
+        const etaStr = data.etaStr || '';
+        let timeStr = (schedArr ? ('Plan: ' + schedArr) : '');
+        if (delayedArr && delayedArr !== schedArr) {
+            timeStr += ' \u2192 ' + delayedArr;
+        }
+        if (etaStr && !isStationStop) {
+            timeStr += (timeStr ? ' • ' : '') + etaStr;
+        }
+        const delayStr = (window._trainDelayMinutes > 0 ? ('+' + window._trainDelayMinutes + ' min') : 'Planowo');
+        const speedVal = (typeof window._smoothedSpeedKmH === 'number' && window._smoothedSpeedKmH >= 4) ? Math.round(window._smoothedSpeedKmH) : 0;
+        const speedStr = speedVal > 0 ? (speedVal + ' km/h') : (isStationStop ? 'Postój' : '0 km/h');
+        const statusStr = 'DK: ' + (window._crewDutyStartStationName || '') + ' \u2192 ' + (window._crewDutyEndStationName || '');
+
+        window.CzuwakNativeWidget.updateWidget(trainInfo, nextStation, distStr, timeStr, delayStr, speedStr, statusStr);
+    } catch (e) {}
 };
 
 function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
