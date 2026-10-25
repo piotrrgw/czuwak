@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.webkit.JavascriptInterface;
 
+import org.json.JSONObject;
+
 public class CzuwakWidgetBridge {
     private final Context context;
 
@@ -31,6 +33,76 @@ public class CzuwakWidgetBridge {
             CzuwakWidgetProvider.updateAllWidgets(context);
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    @JavascriptInterface
+    public void updateWidgetFull(String jsonStr) {
+        if (context == null || jsonStr == null) return;
+        try {
+            JSONObject obj = new JSONObject(jsonStr);
+            SharedPreferences prefs = context.getSharedPreferences("czuwak_widget_prefs", Context.MODE_PRIVATE);
+            SharedPreferences.Editor editor = prefs.edit();
+
+            editor.putBoolean("is_active", true);
+            editor.putString("train_info", obj.optString("trainInfo", "Pociąg"));
+            editor.putString("origin_station", obj.optString("originStation", "Odjazd: trasa pociągu"));
+            editor.putString("next_station", obj.optString("nextStation", "W drodze..."));
+            editor.putString("next_station_clean", obj.optString("nextStationClean", ""));
+            editor.putInt("next_station_idx", obj.optInt("nextStationIdx", -1));
+            editor.putString("dist_str", obj.optString("distStr", "-- km"));
+            editor.putString("time_str", obj.optString("timeStr", "Przyjazd: --:--"));
+            editor.putInt("delay_minutes", obj.optInt("delayMinutes", 0));
+            editor.putString("delay_str", obj.optString("delayStr", "Planowo"));
+            editor.putString("speed_str", obj.optString("speedStr", "0 km/h"));
+            editor.putString("status_str", obj.optString("statusStr", "🔵 NA SZLAKU"));
+            editor.putString("crew_tag", obj.optString("crewTag", ""));
+            editor.putBoolean("is_handover", obj.optBoolean("isHandover", false));
+            editor.putBoolean("is_standing", obj.optBoolean("isStanding", false));
+            editor.putInt("duty_progress", obj.optInt("dutyProgressPercent", 0));
+            editor.putString("duty_stations", obj.optString("dutyStationsStr", ""));
+            editor.putLong("last_updated", System.currentTimeMillis());
+
+            editor.apply();
+
+            CzuwakWidgetProvider.updateAllWidgets(context);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @JavascriptInterface
+    public String getPendingEvents() {
+        if (context == null) return "{}";
+        try {
+            SharedPreferences prefs = context.getSharedPreferences("czuwak_widget_prefs", Context.MODE_PRIVATE);
+            boolean stopChecked = prefs.getBoolean("pending_stop_checked", false);
+            boolean delayChanged = prefs.getBoolean("pending_delay_changed", false);
+
+            if (!stopChecked && !delayChanged) {
+                return "{}";
+            }
+
+            JSONObject res = new JSONObject();
+            if (stopChecked) {
+                res.put("stopChecked", true);
+                res.put("stopIdx", prefs.getInt("pending_stop_idx", -1));
+                res.put("stopTime", prefs.getString("pending_stop_time", ""));
+            }
+            if (delayChanged) {
+                res.put("delayChanged", true);
+                res.put("delayMinutes", prefs.getInt("pending_delay_val", 0));
+            }
+
+            prefs.edit()
+                .putBoolean("pending_stop_checked", false)
+                .putBoolean("pending_delay_changed", false)
+                .apply();
+
+            return res.toString();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "{}";
         }
     }
 

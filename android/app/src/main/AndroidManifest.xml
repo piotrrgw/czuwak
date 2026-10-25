@@ -42,6 +42,8 @@
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="pl.pkp.czuwak.ACTION_UPDATE_WIDGET" />
+                <action android:name="pl.pkp.czuwak.ACTION_CHECK_STOP" />
+                <action android:name="pl.pkp.czuwak.ACTION_ADD_DELAY" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

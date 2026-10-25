@@ -22,5 +22,19 @@ public class MainActivity extends BridgeActivity {
     public void onResume() {
         super.onResume();
         CzuwakWidgetProvider.updateAllWidgets(this);
+        try {
+            if (this.bridge != null && this.bridge.getWebView() != null) {
+                this.bridge.getWebView().post(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            bridge.getWebView().evaluateJavascript("if (typeof window.syncPendingWidgetEvents === 'function') { window.syncPendingWidgetEvents(); }", null);
+                        } catch (Exception ignored) {}
+                    }
+                });
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_bg"
-    android:padding="12dp">
+    android:padding="9dp">
 
     <!-- STAN AKTYWNY (POCIĄG W TRAKCIE OBSŁUGI) -->
     <LinearLayout
@@ -22,9 +22,9 @@
             android:orientation="horizontal">
 
             <ImageView
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:layout_marginEnd="6dp"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_marginEnd="5dp"
                 android:contentDescription="@null"
                 android:src="@drawable/ic_train_widget" />
 
@@ -37,22 +37,22 @@
                 android:maxLines="1"
                 android:text="Pociąg"
                 android:textColor="#ffffff"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/widget_speed"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="6dp"
+                android:layout_marginEnd="4dp"
                 android:background="@drawable/widget_pill_bg"
-                android:paddingStart="8dp"
+                android:paddingStart="6dp"
                 android:paddingTop="2dp"
-                android:paddingEnd="8dp"
+                android:paddingEnd="6dp"
                 android:paddingBottom="2dp"
                 android:text="-- km/h"
                 android:textColor="#94a3b8"
-                android:textSize="11sp"
+                android:textSize="10sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -60,39 +60,58 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:background="@drawable/widget_pill_bg"
-                android:paddingStart="8dp"
+                android:paddingStart="6dp"
                 android:paddingTop="2dp"
-                android:paddingEnd="8dp"
+                android:paddingEnd="6dp"
                 android:paddingBottom="2dp"
                 android:text="Planowo"
                 android:textColor="#4ade80"
-                android:textSize="11sp"
+                android:textSize="10sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Środkowa sekcja: Najbliższa stacja i dystans -->
+        <!-- Oś szlaku: Stacja odjazdu ──🚂──➔ Cel -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
+            android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingTop="4dp"
-            android:paddingBottom="4dp">
+            android:paddingTop="2dp">
+
+            <TextView
+                android:id="@+id/widget_origin_station"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Odjazd: stacja początkowa"
+                android:textColor="#94a3b8"
+                android:textSize="10sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=" ──🚂──➔ "
+                android:textColor="#0284c7"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Główna sekcja: Następna stacja i duży dystans -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingTop="1dp"
+            android:paddingBottom="2dp">
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="NASTĘPNA STACJA:"
-                    android:textColor="#94a3b8"
-                    android:textSize="9sp"
-                    android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/widget_station_name"
@@ -102,8 +121,18 @@
                     android:maxLines="1"
                     android:text="Stacja docelowa"
                     android:textColor="#f8fafc"
-                    android:textSize="16sp"
+                    android:textSize="17sp"
                     android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/widget_time"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Przyjazd: --:--"
+                    android:textColor="#cbd5e1"
+                    android:textSize="11sp" />
             </LinearLayout>
 
             <TextView
@@ -111,43 +140,142 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:background="@drawable/widget_badge_bg"
-                android:paddingStart="10dp"
-                android:paddingTop="5dp"
-                android:paddingEnd="10dp"
-                android:paddingBottom="5dp"
+                android:paddingStart="8dp"
+                android:paddingTop="4dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="4dp"
                 android:text="-- km"
                 android:textColor="#38bdf8"
-                android:textSize="15sp"
+                android:textSize="16sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Dolny pasek: Rozkładowy czas przyjazdu oraz odcinek DK -->
+        <!-- Baner stacji zmiany DK (Handover) -->
+        <TextView
+            android:id="@+id/widget_handover_badge"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="2dp"
+            android:background="@drawable/widget_handover_bg"
+            android:gravity="center"
+            android:paddingStart="6dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="6dp"
+            android:paddingBottom="2dp"
+            android:text="⚠️ STACJA ZMIANY DK (ZDANIE SKŁADU)"
+            android:textColor="#fef08a"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <!-- Pasek tagów drużyny i dynamicznego statusu szlaku -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingTop="1dp"
+            android:paddingBottom="2dp">
 
             <TextView
-                android:id="@+id/widget_time"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:text="Przyjazd: --:--"
-                android:textColor="#cbd5e1"
-                android:textSize="11sp" />
-
-            <TextView
-                android:id="@+id/widget_duty"
+                android:id="@+id/widget_crew_tag"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginEnd="5dp"
+                android:background="@drawable/widget_tag_bg"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:text="Czuwak aktywny"
+                android:paddingStart="6dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="6dp"
+                android:paddingBottom="2dp"
+                android:text="♿ PRM"
+                android:textColor="#c7d2fe"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/widget_train_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/widget_pill_bg"
+                android:paddingStart="6dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="6dp"
+                android:paddingBottom="2dp"
+                android:text="🔵 NA SZLAKU"
+                android:textColor="#38bdf8"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Pasek postępu służby DK -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingTop="2dp"
+            android:paddingBottom="3dp">
+
+            <ProgressBar
+                android:id="@+id/widget_progress_bar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="4dp"
+                android:max="100"
+                android:progress="0"
+                android:progressDrawable="@drawable/widget_progress_bar_drawable" />
+
+            <TextView
+                android:id="@+id/widget_duty_progress"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Służba DK: 0%"
                 android:textColor="#64748b"
-                android:textSize="10sp" />
+                android:textSize="9sp" />
+        </LinearLayout>
+
+        <!-- Interaktywne przyciski konduktorskie pulpitu (RemoteViews) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingTop="2dp">
+
+            <TextView
+                android:id="@+id/widget_btn_check_stop"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_marginEnd="6dp"
+                android:layout_weight="3"
+                android:background="@drawable/widget_btn_green"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="✓ Odhacz postój"
+                android:textColor="#ffffff"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_btn_add_delay"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_weight="1"
+                android:background="@drawable/widget_btn_yellow"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="+5m"
+                android:textColor="#ffffff"
+                android:textSize="11sp"
+                android:textStyle="bold" />
         </LinearLayout>
     </LinearLayout>
 

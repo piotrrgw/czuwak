@@ -431,6 +431,44 @@
                     </div>
                 </div>
 
+                <!-- WYBÓR DŹWIĘKU POWIADOMIENIA CZUWAKA (3 DŹWIĘKI + WŁASNY Z TELEFONU) -->
+                <div class="menu-btn-group">
+                    <div class="menu-btn-group-label">Dźwięk powiadomienia Czuwaka</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+                        <button type="button" id="btnSoundChime" class="menu-btn menu-btn-secondary" onclick="window.setNotificationSound('chime')" style="justify-content: center; padding: 10px 6px; font-weight: 800; font-size: 0.8rem; text-align: center; min-height: 46px;">
+                            🔔 Gong peronowy
+                        </button>
+                        <button type="button" id="btnSoundRadar" class="menu-btn menu-btn-secondary" onclick="window.setNotificationSound('radar')" style="justify-content: center; padding: 10px 6px; font-weight: 800; font-size: 0.8rem; text-align: center; min-height: 46px;">
+                            📡 Radar Czuwaka
+                        </button>
+                        <button type="button" id="btnSoundHorn" class="menu-btn menu-btn-secondary" onclick="window.setNotificationSound('horn')" style="justify-content: center; padding: 10px 6px; font-weight: 800; font-size: 0.8rem; text-align: center; min-height: 46px;">
+                            🚂 Trąbka pociągu
+                        </button>
+                        <button type="button" id="btnSoundCustom" class="menu-btn menu-btn-secondary" onclick="window.setNotificationSound('custom')" style="justify-content: center; padding: 10px 6px; font-weight: 800; font-size: 0.8rem; text-align: center; min-height: 46px;">
+                            📁 Własny dźwięk
+                        </button>
+                    </div>
+
+                    <!-- Panel konfiguracji własnego pliku audio -->
+                    <div id="customSoundPanel" style="display: none; background: var(--input-bg); border: 1px dashed var(--primary); border-radius: 8px; padding: 10px; margin-bottom: 8px;">
+                        <div style="font-size: 0.76rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px;">Plik audio z pamięci telefonu:</div>
+                        <div id="customSoundNameLabel" style="font-size: 0.84rem; font-weight: 800; color: var(--primary); margin-bottom: 8px; word-break: break-all;">Brak wybranego pliku</div>
+                        <div style="display: flex; gap: 6px;">
+                            <button type="button" class="menu-btn menu-btn-primary" onclick="document.getElementById('customAudioFileInput').click()" style="flex: 2; padding: 8px; font-size: 0.78rem; justify-content: center; min-height: 44px;">
+                                <span class="material-symbols-outlined icon-sm">audio_file</span> Wybierz z pamięci
+                            </button>
+                            <button type="button" id="btnDeleteCustomSound" class="menu-btn menu-btn-secondary" onclick="window.clearCustomSound()" style="flex: 1; padding: 8px; font-size: 0.78rem; justify-content: center; min-height: 44px; color: var(--danger); display: none;">
+                                <span class="material-symbols-outlined icon-sm">delete</span> Usuń
+                            </button>
+                        </div>
+                        <input type="file" id="customAudioFileInput" accept="audio/*" style="display: none;" onchange="window.handleCustomSoundSelected(this)">
+                    </div>
+
+                    <button type="button" class="menu-btn menu-btn-secondary" onclick="window.playCurrentNotificationSound()" style="justify-content: center; font-weight: 800; font-size: 0.82rem; min-height: 44px;">
+                        <span class="material-symbols-outlined" style="color:var(--primary); font-size:1.15rem;">play_arrow</span> ▶️ Odsłuchaj aktywny dźwięk
+                    </button>
+                </div>
+
                 <div class="menu-btn-group">
                     <div class="menu-btn-group-label">Włącznik i test dźwięku</div>
                     <button id="btnToggleStationAlerts" class="menu-btn menu-btn-secondary" onclick="window.toggleStationApproachAlerts()">

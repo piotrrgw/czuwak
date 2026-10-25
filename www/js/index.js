@@ -167,6 +167,9 @@ window.setAlertMode = (mode) => {
 };
 
 window.syncAlertConfigUI = () => {
+    if (typeof window.syncNotificationSoundUI === 'function') {
+        window.syncNotificationSoundUI();
+    }
     const dist = window.getAlertDistanceKm();
     const distStr = dist.toFixed(1) + ' km';
     const mode = window.getAlertMode();
@@ -278,8 +281,113 @@ window.updateStationAlertsMenuButton = () => {
     window.syncAlertConfigUI();
 };
 
-// Dwukrotny gong kolejowy (Bim-Bam... Bim-Bam) - 100% głośności cyfrowej
-window.playStationChime = () => {
+// ==========================================
+// SYSTEM DŹWIĘKÓW CZUWAKA (3 DŹWIĘKI + WŁASNY Z TELEFONU)
+// ==========================================
+window._currentAudioPlayer = null;
+
+window.getNotificationSoundType = () => {
+    const s = localStorage.getItem('CZUWAK_NOTIFICATION_SOUND_TYPE');
+    return (s === 'radar' || s === 'horn' || s === 'custom') ? s : 'chime';
+};
+
+window.setNotificationSound = (type) => {
+    const cleanType = (type === 'radar' || type === 'horn' || type === 'custom') ? type : 'chime';
+    localStorage.setItem('CZUWAK_NOTIFICATION_SOUND_TYPE', cleanType);
+    window.syncNotificationSoundUI();
+    window.playNotificationSound(cleanType);
+};
+
+window.handleCustomSoundSelected = (inputEl) => {
+    if (!inputEl || !inputEl.files || inputEl.files.length === 0) return;
+    const file = inputEl.files[0];
+    if (!file) return;
+
+    if (file.size > 12 * 1024 * 1024) {
+        alert('Wybrany plik audio jest zbyt duży (maks. 12 MB). Proszę wybrać mniejszy plik dzwonka.');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const dataUrl = e.target.result;
+            localStorage.setItem('CZUWAK_CUSTOM_SOUND_DATA', dataUrl);
+            localStorage.setItem('CZUWAK_CUSTOM_SOUND_NAME', file.name || 'Własny dźwięk');
+            localStorage.setItem('CZUWAK_NOTIFICATION_SOUND_TYPE', 'custom');
+            window.syncNotificationSoundUI();
+            window.playNotificationSound('custom');
+        } catch (err) {
+            console.error('Błąd zapisu pliku audio w localStorage:', err);
+            alert('Wystąpił błąd podczas zapisywania pliku dźwiękowego.');
+        }
+    };
+    reader.onerror = () => {
+        alert('Błąd odczytu pliku audio z urządzenia.');
+    };
+    reader.readAsDataURL(file);
+};
+
+window.clearCustomSound = () => {
+    localStorage.removeItem('CZUWAK_CUSTOM_SOUND_DATA');
+    localStorage.removeItem('CZUWAK_CUSTOM_SOUND_NAME');
+    localStorage.setItem('CZUWAK_NOTIFICATION_SOUND_TYPE', 'chime');
+    const fileInput = document.getElementById('customAudioFileInput');
+    if (fileInput) fileInput.value = '';
+    window.syncNotificationSoundUI();
+    window.playNotificationSound('chime');
+};
+
+window.syncNotificationSoundUI = () => {
+    const curType = window.getNotificationSoundType();
+    const customData = localStorage.getItem('CZUWAK_CUSTOM_SOUND_DATA');
+    const customName = localStorage.getItem('CZUWAK_CUSTOM_SOUND_NAME') || '';
+
+    const btnChime = document.getElementById('btnSoundChime');
+    const btnRadar = document.getElementById('btnSoundRadar');
+    const btnHorn = document.getElementById('btnSoundHorn');
+    const btnCustom = document.getElementById('btnSoundCustom');
+
+    const updateBtn = (btn, isAct, activeColor) => {
+        if (!btn) return;
+        btn.style.borderColor = isAct ? activeColor : '';
+        btn.style.background = isAct ? 'rgba(2, 132, 199, 0.22)' : '';
+        btn.style.color = isAct ? '#ffffff' : '';
+    };
+
+    updateBtn(btnChime, curType === 'chime', 'var(--primary)');
+    updateBtn(btnRadar, curType === 'radar', '#38bdf8');
+    updateBtn(btnHorn, curType === 'horn', '#f59e0b');
+    updateBtn(btnCustom, curType === 'custom', '#a855f7');
+
+    const panel = document.getElementById('customSoundPanel');
+    if (panel) {
+        panel.style.display = (curType === 'custom') ? 'block' : 'none';
+    }
+
+    const nameLabel = document.getElementById('customSoundNameLabel');
+    if (nameLabel) {
+        if (customData && customName) {
+            nameLabel.innerText = '📁 ' + customName;
+            nameLabel.style.color = 'var(--text)';
+        } else {
+            nameLabel.innerText = 'Brak wybranego pliku (kliknij „Wybierz z pamięci”)';
+            nameLabel.style.color = 'var(--text-muted)';
+        }
+    }
+
+    const delBtn = document.getElementById('btnDeleteCustomSound');
+    if (delBtn) {
+        delBtn.style.display = customData ? 'inline-flex' : 'none';
+    }
+};
+
+window.playCurrentNotificationSound = () => {
+    window.playNotificationSound();
+};
+
+// Synteza Web Audio dla 3 wbudowanych sygnałów Czuwaka
+window.playSynthesizedSound = (soundType) => {
     try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return;
@@ -292,30 +400,126 @@ window.playStationChime = () => {
         }
 
         const now = ctx.currentTime;
-        const playTone = (freq, startOffset, duration, peakGain) => {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(freq, now + startOffset);
-            gain.gain.setValueAtTime(0.001, now + startOffset);
-            gain.gain.exponentialRampToValueAtTime(peakGain, now + startOffset + 0.04);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + startOffset + duration);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start(now + startOffset);
-            osc.stop(now + startOffset + duration + 0.05);
-        };
 
-        // Cykl 1: Bim (698.46 Hz) -> Bam (880.00 Hz)
-        playTone(698.46, 0.00, 0.40, 0.95);
-        playTone(880.00, 0.30, 0.48, 1.00);
+        if (soundType === 'radar') {
+            // Dźwięk 2: Radar Czuwaka (Nowoczesny sonar pokładowy)
+            const playChirp = (startOffset, fStart, fEnd, duration, peakGain) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(fStart, now + startOffset);
+                osc.frequency.exponentialRampToValueAtTime(fEnd, now + startOffset + duration);
 
-        // Cykl 2: Bim (698.46 Hz) -> Bam (880.00 Hz)
-        playTone(698.46, 0.82, 0.40, 0.95);
-        playTone(880.00, 1.12, 0.55, 1.00);
+                gain.gain.setValueAtTime(0.001, now + startOffset);
+                gain.gain.exponentialRampToValueAtTime(peakGain, now + startOffset + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + startOffset + duration);
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now + startOffset);
+                osc.stop(now + startOffset + duration + 0.05);
+            };
+
+            // Główny impuls sonaru
+            playChirp(0.00, 520, 980, 0.22, 0.95);
+            // Wyższa harmoniczna
+            playChirp(0.00, 1040, 1960, 0.18, 0.35);
+            // Subtelne echo po 280 ms
+            playChirp(0.28, 880, 1320, 0.20, 0.60);
+        } else if (soundType === 'horn') {
+            // Dźwięk 3: Sygnał pociągu (Trąbka lokomotywy PKP)
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(1900, now);
+            filter.connect(ctx.destination);
+
+            const freqs = [311.13, 370.00, 466.16, 622.25]; // Akord lokomotywy PKP
+
+            const playBlast = (startOffset, duration, peakGain) => {
+                const blastGain = ctx.createGain();
+                blastGain.gain.setValueAtTime(0.001, now + startOffset);
+                blastGain.gain.exponentialRampToValueAtTime(peakGain, now + startOffset + 0.03);
+                blastGain.gain.setValueAtTime(peakGain * 0.95, now + startOffset + duration - 0.05);
+                blastGain.gain.exponentialRampToValueAtTime(0.001, now + startOffset + duration);
+                blastGain.connect(filter);
+
+                freqs.forEach(f => {
+                    const osc = ctx.createOscillator();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(f, now + startOffset);
+                    osc.connect(blastGain);
+                    osc.start(now + startOffset);
+                    osc.stop(now + startOffset + duration + 0.05);
+                });
+            };
+
+            // Dwa wyraziste sygnały baczność lokomotywy
+            playBlast(0.00, 0.36, 0.85);
+            playBlast(0.44, 0.52, 0.95);
+        } else {
+            // Dźwięk 1 (Domyślny): Bim-Bam dwukrotny gong peronowy PKP
+            const playTone = (freq, startOffset, duration, peakGain) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, now + startOffset);
+                gain.gain.setValueAtTime(0.001, now + startOffset);
+                gain.gain.exponentialRampToValueAtTime(peakGain, now + startOffset + 0.04);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + startOffset + duration);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now + startOffset);
+                osc.stop(now + startOffset + duration + 0.05);
+            };
+
+            // Cykl 1: Bim (698.46 Hz) -> Bam (880.00 Hz)
+            playTone(698.46, 0.00, 0.40, 0.95);
+            playTone(880.00, 0.30, 0.48, 1.00);
+
+            // Cykl 2: Bim (698.46 Hz) -> Bam (880.00 Hz)
+            playTone(698.46, 0.82, 0.40, 0.95);
+            playTone(880.00, 1.12, 0.55, 1.00);
+        }
     } catch (e) {
-        console.warn('Błąd odtwarzania sygnału audio:', e);
+        console.warn('Błąd syntezy sygnału audio:', e);
     }
+};
+
+window.playNotificationSound = (explicitType = null) => {
+    const soundType = explicitType || window.getNotificationSoundType();
+
+    if (soundType === 'custom') {
+        const customData = localStorage.getItem('CZUWAK_CUSTOM_SOUND_DATA');
+        if (customData) {
+            try {
+                if (window._currentAudioPlayer) {
+                    try { window._currentAudioPlayer.pause(); } catch (e) {}
+                    window._currentAudioPlayer = null;
+                }
+                const audio = new Audio(customData);
+                audio.volume = 1.0;
+                window._currentAudioPlayer = audio;
+                const p = audio.play();
+                if (p && typeof p.catch === 'function') {
+                    p.catch(err => {
+                        console.warn('Błąd odtwarzania własnego pliku audio, fallback do gongu:', err);
+                        window.playSynthesizedSound('chime');
+                    });
+                }
+                return;
+            } catch (err) {
+                console.warn('Wyjątek odtwarzacza własnego audio:', err);
+            }
+        }
+        window.playSynthesizedSound('chime');
+        return;
+    }
+
+    window.playSynthesizedSound(soundType);
+};
+
+window.playStationChime = () => {
+    window.playNotificationSound();
 };
 
 window.stopAlarmLoop = () => {
@@ -323,8 +527,72 @@ window.stopAlarmLoop = () => {
         clearInterval(window._alarmLoopInterval);
         window._alarmLoopInterval = null;
     }
+    if (window._currentAudioPlayer) {
+        try {
+            window._currentAudioPlayer.pause();
+            window._currentAudioPlayer.currentTime = 0;
+        } catch (e) {}
+        window._currentAudioPlayer = null;
+    }
     if ('vibrate' in navigator) {
         try { navigator.vibrate(0); } catch (e) {}
+    }
+};
+
+window.showCzuwakWidgetActionToast = (message, icon = 'check_circle', color = '#4ade80') => {
+    let toast = document.getElementById('czuwakActionToast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'czuwakActionToast';
+        toast.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99998; background:rgba(15,23,42,0.96); border:1.5px solid ' + color + '; border-radius:999px; padding:8px 18px; color:#ffffff; font-size:0.84rem; font-weight:800; display:flex; align-items:center; gap:8px; box-shadow:0 8px 24px rgba(0,0,0,0.5); backdrop-filter:blur(8px); transition:opacity 0.3s ease; animation: slideDownToast 0.3s ease-out;';
+        document.body.appendChild(toast);
+    }
+    toast.style.borderColor = color;
+    toast.innerHTML = '\x3Cspan class="material-symbols-outlined icon-sm" style="color:' + color + ';"\x3E' + icon + '\x3C/span\x3E ' +
+        '\x3Cspan\x3E' + escapeHTML(message) + '\x3C/span\x3E';
+    toast.style.display = 'flex';
+    toast.style.opacity = '1';
+
+    if (window._czuwakActionToastTimer) clearTimeout(window._czuwakActionToastTimer);
+    window._czuwakActionToastTimer = setTimeout(() => {
+        if (toast) {
+            toast.style.opacity = '0';
+            setTimeout(() => { if (toast) toast.style.display = 'none'; }, 300);
+        }
+    }, 3800);
+};
+
+window.syncPendingWidgetEvents = () => {
+    if (!window.CzuwakNativeWidget || typeof window.CzuwakNativeWidget.getPendingEvents !== 'function') return;
+    try {
+        const rawJson = window.CzuwakNativeWidget.getPendingEvents();
+        if (!rawJson || rawJson === '{}') return;
+        const events = JSON.parse(rawJson);
+
+        if (events.stopChecked && typeof events.stopIdx === 'number' && events.stopIdx >= 0) {
+            const stopIdx = events.stopIdx;
+            const stopTime = events.stopTime || formatNowHHMMSS();
+            window.recordStationArrivalStop(stopIdx, stopTime);
+
+            let stName = 'Stacja ' + (stopIdx + 1);
+            if (window._currentTrainObject && window._currentTrainObject.stacje) {
+                const arr = Array.isArray(window._currentTrainObject.stacje)
+                    ? window._currentTrainObject.stacje
+                    : Object.values(window._currentTrainObject.stacje);
+                if (arr[stopIdx]) {
+                    const st = arr[stopIdx];
+                    stName = (typeof st === 'object' && st.nazwa) ? st.nazwa : (typeof st === 'string' ? st : stName);
+                }
+            }
+            window.showCzuwakWidgetActionToast('Post\u00f3j odhaczony z pulpitu: ' + stName + ' (' + stopTime + ')', 'check_circle', '#4ade80');
+        }
+
+        if (events.delayChanged && typeof events.delayMinutes === 'number') {
+            window.setTrainDelay(events.delayMinutes);
+            window.showCzuwakWidgetActionToast('Op\u00f3\u017anienie podbite z pulpitu: +' + events.delayMinutes + ' min', 'schedule', '#fbbf24');
+        }
+    } catch (e) {
+        console.warn('B\u0142\u0105d synchronizacji zdarze\u0144 widgetu:', e);
     }
 };
 
@@ -934,6 +1202,9 @@ function tickZegar(forceHeaderRender = false) {
             clockTimeEl.textContent = d.toLocaleTimeString('pl-PL');
         }
     }
+    if (typeof window.syncPendingWidgetEvents === 'function') {
+        window.syncPendingWidgetEvents();
+    }
 }
 
 function startClockLoop() {
@@ -946,7 +1217,12 @@ function startClockLoop() {
 startClockLoop();
 
 document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) tickZegar(true);
+    if (!document.hidden) {
+        tickZegar(true);
+        if (typeof window.syncPendingWidgetEvents === 'function') {
+            window.syncPendingWidgetEvents();
+        }
+    }
 });
 
 // ==========================================
@@ -3765,17 +4041,40 @@ window.updateNextStationHud = (hudData) => {
 };
 
 window.syncNativeAppWidget = (hudData) => {
-    if (!window.CzuwakNativeWidget || typeof window.CzuwakNativeWidget.updateWidget !== 'function') return;
+    if (!window.CzuwakNativeWidget) return;
     if (!window._currentTrainObject) return;
     try {
         const data = hudData || window._lastNextStationHudData || {};
         const trNum = window._currentActiveTrainNumber || '';
         const trName = window._currentTrainObject.nazwa ? (' ' + window._currentTrainObject.nazwa) : '';
         const trainInfo = (trNum + trName).trim() || 'Pociąg';
-        const stName = data.name || '';
+
+        const stacjeArray = Array.isArray(window._currentTrainObject.stacje)
+            ? window._currentTrainObject.stacje
+            : Object.values(window._currentTrainObject.stacje || {});
+        const totalStations = stacjeArray.length;
+
+        const nextStationIdx = (typeof data.index === 'number') ? data.index : -1;
+        const cleanStationName = data.name || (nextStationIdx >= 0 && stacjeArray[nextStationIdx] ? (stacjeArray[nextStationIdx].nazwa || '') : '');
         const isStationStop = !!data.isStationStop;
         const nextPrefix = isStationStop ? 'Postój: ' : '\u2794 ';
-        const nextStation = nextPrefix + stName;
+        const nextStation = nextPrefix + (cleanStationName || 'W drodze...');
+
+        // Oś szlaku: stacja odjazdu
+        let originStation = 'Odjazd: trasa pociągu';
+        if (nextStationIdx > 0 && stacjeArray[nextStationIdx - 1]) {
+            const prevSt = stacjeArray[nextStationIdx - 1];
+            const prevName = (typeof prevSt === 'object' && prevSt.nazwa) ? prevSt.nazwa : (typeof prevSt === 'string' ? prevSt : '');
+            const prevDep = (prevSt && prevSt.odjazd && prevSt.odjazd !== '-') ? prevSt.odjazd : (prevSt ? prevSt.przyjazd : '');
+            originStation = 'Odj: ' + prevName + (prevDep ? (' (' + prevDep + ')') : '');
+        } else if (window._crewDutyStartStationName) {
+            originStation = 'Początek DK: ' + window._crewDutyStartStationName;
+        } else if (totalStations > 0 && stacjeArray[0]) {
+            const firstSt = stacjeArray[0];
+            const firstName = (typeof firstSt === 'object' && firstSt.nazwa) ? firstSt.nazwa : '';
+            originStation = 'Start: ' + firstName;
+        }
+
         const distKm = data.distKm;
         const distStr = (typeof distKm === 'number') ? ('~' + distKm.toFixed(1) + ' km') : (data.distStr || '-- km');
         const schedArr = data.schedArr || '';
@@ -3788,13 +4087,74 @@ window.syncNativeAppWidget = (hudData) => {
         if (etaStr && !isStationStop) {
             timeStr += (timeStr ? ' • ' : '') + etaStr;
         }
-        const delayStr = (window._trainDelayMinutes > 0 ? ('+' + window._trainDelayMinutes + ' min') : 'Planowo');
+
+        const delayMinutes = window._trainDelayMinutes || 0;
+        const delayStr = (delayMinutes > 0 ? ('+' + delayMinutes + ' min') : 'Planowo');
         const speedVal = (typeof window._smoothedSpeedKmH === 'number' && window._smoothedSpeedKmH >= 4) ? Math.round(window._smoothedSpeedKmH) : 0;
         const speedStr = speedVal > 0 ? (speedVal + ' km/h') : (isStationStop ? 'Postój' : '0 km/h');
-        const statusStr = 'DK: ' + (window._crewDutyStartStationName || '') + ' \u2192 ' + (window._crewDutyEndStationName || '');
 
-        window.CzuwakNativeWidget.updateWidget(trainInfo, nextStation, distStr, timeStr, delayStr, speedStr, statusStr);
-    } catch (e) {}
+        // Dynamiczny status szlaku
+        let statusStr = '🔵 NA SZLAKU';
+        if (isStationStop || (speedVal <= 4 && distKm !== null && distKm <= 0.35)) {
+            statusStr = '🟢 POSTÓJ NA STACJI';
+        } else if (distKm !== null && distKm <= 2.0) {
+            statusStr = '🟠 ZBLIŻANIE DO STACJI';
+        }
+
+        // Znacznik drużyny (Crew Tag)
+        const crewTag = (nextStationIdx >= 0) ? (window.getStationTag(nextStationIdx) || '') : '';
+
+        // Czy to stacja zdania składu (Handover)
+        const isHandover = !!data.isHandover || (
+            typeof window._crewDutyEndStationName === 'string' &&
+            window._crewDutyEndStationName &&
+            cleanStationName &&
+            cleanStationName.toUpperCase().trim() === window._crewDutyEndStationName
+        );
+
+        // Czy aktualnie stoi
+        const isStanding = (statusStr.indexOf('POSTÓJ') !== -1);
+
+        // Procent postępu służby DK
+        let dutyProgressPercent = 0;
+        if (typeof window._crewDutyStartIdx === 'number' && typeof window._crewDutyEndIdx === 'number' && window._crewDutyEndIdx > window._crewDutyStartIdx) {
+            const span = window._crewDutyEndIdx - window._crewDutyStartIdx;
+            const cur = (nextStationIdx >= 0 ? nextStationIdx : 0) - window._crewDutyStartIdx;
+            dutyProgressPercent = Math.min(100, Math.max(0, Math.round((cur / span) * 100)));
+        } else if (totalStations > 1 && nextStationIdx >= 0) {
+            dutyProgressPercent = Math.min(100, Math.max(0, Math.round((nextStationIdx / (totalStations - 1)) * 100)));
+        }
+
+        const dutyStationsStr = (window._crewDutyStartStationName && window._crewDutyEndStationName)
+            ? (window._crewDutyStartStationName + ' \u2192 ' + window._crewDutyEndStationName)
+            : '';
+
+        if (typeof window.CzuwakNativeWidget.updateWidgetFull === 'function') {
+            const payload = {
+                trainInfo: trainInfo,
+                originStation: originStation,
+                nextStation: nextStation,
+                nextStationClean: cleanStationName,
+                nextStationIdx: nextStationIdx,
+                distStr: distStr,
+                timeStr: timeStr,
+                delayMinutes: delayMinutes,
+                delayStr: delayStr,
+                speedStr: speedStr,
+                statusStr: statusStr,
+                crewTag: crewTag,
+                isHandover: isHandover,
+                isStanding: isStanding,
+                dutyProgressPercent: dutyProgressPercent,
+                dutyStationsStr: dutyStationsStr
+            };
+            window.CzuwakNativeWidget.updateWidgetFull(JSON.stringify(payload));
+        } else if (typeof window.CzuwakNativeWidget.updateWidget === 'function') {
+            window.CzuwakNativeWidget.updateWidget(trainInfo, nextStation, distStr, timeStr, delayStr, speedStr, statusStr);
+        }
+    } catch (e) {
+        console.warn('Błąd synchronizacji widgetu:', e);
+    }
 };
 
 function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
@@ -4289,6 +4649,9 @@ window._wasInTunnelEstimation = false;
 
 window.locateTrainByGPS = async (silent = false) => {
     if (window._crewDutyCompleted) return;
+    if (typeof window.syncPendingWidgetEvents === 'function') {
+        window.syncPendingWidgetEvents();
+    }
 
     const rows = Array.from(document.querySelectorAll('.train-route-table tr:not(.train-moving-row):not(.station-standing-train-row):not(thead tr)'));
     if (rows.length === 0) return !silent && alert("Najpierw wyszukaj trasę pociągu!");
@@ -5113,6 +5476,9 @@ document.addEventListener('visibilitychange', () => {
 // ==========================================
 function bootApplication() {
     window.syncAlertConfigUI();
+    if (typeof window.syncPendingWidgetEvents === 'function') {
+        window.syncPendingWidgetEvents();
+    }
     window.syncTrainDateButtonsUI();
 
     ['trainInput', 'trainNameInput'].forEach(id => {
