@@ -102,6 +102,114 @@
             background: #0f172a;
             z-index: 10;
         }
+        .fab-speed-circle {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: rgba(15, 23, 42, 0.94);
+            border: 2.5px solid var(--text-muted);
+            color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+            cursor: pointer;
+            position: relative;
+            user-select: none;
+            transition: border-color 0.25s ease, transform 0.2s ease, box-shadow 0.25s ease;
+            padding: 2px;
+        }
+        .fab-speed-circle:active {
+            transform: scale(0.94);
+        }
+        .fab-speed-circle.gps-ok {
+            border-color: #22c55e;
+            box-shadow: 0 0 14px rgba(34, 197, 94, 0.45);
+        }
+        .fab-speed-circle.gps-bts {
+            border-color: #f59e0b;
+            box-shadow: 0 0 14px rgba(245, 158, 11, 0.4);
+        }
+        .fab-speed-circle.gps-tunnel {
+            border-color: #f97316;
+            box-shadow: 0 0 16px rgba(249, 115, 22, 0.55);
+            animation: pulseTunnelBorder 1.4s infinite alternate;
+        }
+        .fab-speed-circle.gps-off {
+            border-color: #64748b;
+            opacity: 0.85;
+        }
+        @keyframes pulseTunnelBorder {
+            from { box-shadow: 0 0 8px rgba(249, 115, 22, 0.35); }
+            to { box-shadow: 0 0 20px rgba(239, 68, 68, 0.75); }
+        }
+        .fab-speed-val {
+            font-size: 1.18rem;
+            font-weight: 900;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+            color: #ffffff;
+            margin-top: 4px;
+        }
+        .fab-speed-unit {
+            font-size: 0.58rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: #94a3b8;
+            line-height: 1.1;
+        }
+        .fab-gps-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #1e293b;
+            border: 2px solid #64748b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+        }
+        .fab-speed-circle.gps-ok .fab-gps-badge {
+            background: #16a34a;
+            border-color: #dcfce7;
+            color: #ffffff;
+        }
+        .fab-speed-circle.gps-bts .fab-gps-badge {
+            background: #d97706;
+            border-color: #fef3c7;
+            color: #ffffff;
+        }
+        .fab-speed-circle.gps-tunnel .fab-gps-badge {
+            background: #ea580c;
+            border-color: #ffedd5;
+            color: #ffffff;
+        }
+        .duty-config-box {
+            background: var(--input-bg);
+            border: 1.5px solid var(--primary);
+            border-radius: 10px;
+            padding: 12px;
+            margin-top: 10px;
+        }
+        .duty-select {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--input-border);
+            background: var(--bg);
+            color: var(--text);
+            font-weight: 700;
+            font-size: 0.88rem;
+            margin-top: 4px;
+        }
+        tr.outside-duty-row {
+            opacity: 0.42;
+        }
     </style>
          
     <!-- BOCZNE MENU (Wysuwane) -->
@@ -213,10 +321,10 @@
             <div class="menu-section">
                 <h3><span class="material-symbols-outlined">menu_book</span> Jak działa Czuwak?</h3>
                 <ul style="margin-top: 0; padding-left: 18px; font-size: 0.88rem; color: var(--text-muted); line-height: 1.55; margin-bottom: 0;">
-                    <li><strong>1. Wybierz pociąg i datę wyjazdu:</strong> Wpisz numer lub nazwę pociągu oraz wskaż datę wyjazdu ze stacji początkowej (np. <em>Wczoraj</em> dla pociągu nocnego lub <em>Dzisiaj</em>).</li>
-                    <li><strong>2. Skonfiguruj alarm:</strong> Ustaw suwakiem wyprzedzenie (od 1 do 15 km, domyślnie 6 km) oraz wybierz tryb: <strong>Jednokrotne przypomnienie</strong> lub <strong>Tryb Budzika</strong> (dźwięk w pętli do momentu potwierdzenia na ekranie).</li>
-                    <li><strong>3. Włącz śledzenie GPS i mapę OpenRailwayMap:</strong> Kliknij pływający przycisk <strong>Celownika (GPS)</strong> lub otwórz podgląd trasy na mapie kolejowej OpenRailwayMap (dostępnej również offline).</li>
-                    <li><strong>4. Odporność na zanik GPS / Internetu:</strong> Bazy pociągów, stacji oraz pobrane kafelki OpenRailwayMap działają w 100% offline. W razie zaniku sygnału GPS (np. w tunelu) Czuwak automatycznie podtrzymuje szacowaną pozycję z ostatniej prędkości i rozkładu jazdy.</li>
+                    <li><strong>1. Skonfiguruj pociąg:</strong> Wybierz datę wyjazdu ze stacji początkowej, wpisz numer lub nazwę pociągu i wskaż swój <strong>odcinek obsługi DK</strong> (stację objęcia oraz stację zmiany DK).</li>
+                    <li><strong>2. Automatyczny Czuwak i Mapa Offline:</strong> Po wybraniu pociągu Czuwak GPS włącza się automatycznie, a mapa trasy OpenRailwayMap sama pobiera się w tle do pamięci offline telefonu.</li>
+                    <li><strong>3. Samoczynne wyłączenie po zmianie DK:</strong> Po wjeździe na wybraną <strong>stację zmiany DK</strong> (lub jej odhaczeniu) aplikacja automatycznie wyłącza Czuwak, aby nie działać w tle po wyjściu z pociągu.</li>
+                    <li><strong>4. Odporność na tunele (Brak GPS i BTS):</strong> W razie wjazdu do tunelu i utraty zasięgu GPS oraz BTS aplikacja płynnie wylicza pozycję i prędkość na szlaku, a po wyjeździe z tunelu natychmiast synchronizuje namiar.</li>
                 </ul>
             </div>
         </div>
@@ -303,7 +411,7 @@
         <div class="controls glass-panel">
             <div class="toggle-container" style="padding: 6px;">
                 <div id="tabTrain" class="toggle-btn active" onclick="window.switchMode('train')">
-                    <span class="material-symbols-outlined icon-sm">directions_transit</span> Pociąg
+                    <span class="material-symbols-outlined icon-sm">tune</span> Skonfiguruj pociąg
                 </div>
                 <div id="tabRecent" class="toggle-btn" onclick="window.switchMode('recent')">
                     <span class="material-symbols-outlined icon-sm">history</span> Ostatnie (5)
@@ -311,11 +419,11 @@
             </div>
                          
             <div id="searchTrainBox">
-                <!-- WYBÓR DATY WYJAZDU POCIĄGU PRZEZ PRACOWNIKA -->
+                <!-- KROK 1: DATA WYJAZDU POCIĄGU ZE STACJI POCZĄTKOWEJ -->
                 <div style="background: var(--input-bg); border: 1px solid var(--glass-border); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px;">
                     <label for="trainDepartureDateInput" style="display: flex; align-items: center; gap: 6px; font-size: 0.84rem; font-weight: 700; color: var(--text); margin-bottom: 8px;">
                         <span class="material-symbols-outlined icon-sm" style="color: var(--primary);">calendar_month</span>
-                        Data wyjazdu pociągu (ze stacji początkowej):
+                        1. Data wyjazdu pociągu ze stacji początkowej:
                     </label>
                     <div style="display: flex; gap: 6px; margin-bottom: 8px;">
                         <button type="button" id="btnDateYesterday" class="date-quick-btn" onclick="window.setRelativeTrainDate(-1)">Wczoraj</button>
@@ -325,12 +433,13 @@
                     <input type="date" id="trainDepartureDateInput" onchange="window.onTrainDateChange(this.value)" style="width: 100%; margin-bottom: 0; padding: 8px 10px; font-weight: 700; font-size: 0.92rem;">
                 </div>
 
+                <!-- KROK 2: NUMER LUB NAZWA POCIĄGU -->
                 <div class="toggle-container" style="background: var(--input-bg); padding: 4px; margin-bottom: 10px;">
                     <div id="subTabTrainNumber" class="toggle-btn active" onclick="window.switchTrainMode('number')" style="padding: 8px; font-size: 0.85rem;">
-                        <span class="material-symbols-outlined icon-sm">tag</span> Po numerze
+                        <span class="material-symbols-outlined icon-sm">tag</span> 2. Po numerze
                     </div>
                     <div id="subTabTrainName" class="toggle-btn" onclick="window.switchTrainMode('name')" style="padding: 8px; font-size: 0.85rem;">
-                        <span class="material-symbols-outlined icon-sm">abc</span> Po nazwie
+                        <span class="material-symbols-outlined icon-sm">abc</span> 2. Po nazwie
                     </div>
                 </div>
                                  
@@ -357,6 +466,32 @@
                     </div>
                     <datalist id="trainNamesDictionary"></datalist>
                 </div>
+
+                <!-- KROK 3: ODCINEK OBSŁUGI DK (STACJA OBJĘCIA -> STACJA ZMIANY DK / AUTO-WYŁĄCZENIE) -->
+                <div id="crewDutyConfigBox" class="duty-config-box" style="display: none;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px;">
+                        <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 800; color: var(--primary);">
+                            <span class="material-symbols-outlined icon-sm">badge</span>
+                            3. Odcinek obsługi DK (auto-wyłączenie po zmianie):
+                        </span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
+                        <div>
+                            <label for="dutyStartStationSelect" style="font-size: 0.76rem; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                                <span class="material-symbols-outlined" style="font-size: 0.95rem; color: #22c55e;">login</span>
+                                Stacja objęcia (wsiadam):
+                            </label>
+                            <select id="dutyStartStationSelect" class="duty-select" onchange="window.onCrewDutySegmentChange()"></select>
+                        </div>
+                        <div>
+                            <label for="dutyEndStationSelect" style="font-size: 0.76rem; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                                <span class="material-symbols-outlined" style="font-size: 0.95rem; color: #f59e0b;">logout</span>
+                                Stacja zmiany DK / zdania (wysiadam – wyłączy Czuwaka):
+                            </label>
+                            <select id="dutyEndStationSelect" class="duty-select" onchange="window.onCrewDutySegmentChange()"></select>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- SEKCJA OSTATNIO UŻYWANE POCIĄGI -->
@@ -379,16 +514,16 @@
         </div>
         <div id="mainStatusBox">STATUS</div>
 
-        <!-- PANEL PODGLĄDU MAPY OPENRAILWAYMAP (ONLINE + OFFLINE DB) -->
+        <!-- PANEL PODGLĄDU MAPY OPENRAILWAYMAP (AUTOMATYCZNY ZAPIS TRASY OFFLINE) -->
         <div id="openRailwayMapSection" style="display: none;">
             <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
                 <button type="button" id="btnToggleOrmMap" class="menu-btn menu-btn-secondary" onclick="window.toggleOpenRailwayMap()" style="flex: 1; margin: 0; justify-content: center; min-height: 44px;">
                     <span class="material-symbols-outlined" style="color: var(--primary);">map</span>
                     <span id="btnToggleOrmMapLabel">Pokaż trasę na OpenRailwayMap</span>
                 </button>
-                <button type="button" id="btnCacheRouteOrm" class="menu-btn menu-btn-secondary" onclick="window.downloadCurrentRouteMapOffline()" style="width: auto; margin: 0; padding: 8px 14px; min-height: 44px;" title="Zapisz kafelki OpenRailwayMap dla tej trasy do bazy offline">
-                    <span class="material-symbols-outlined" style="color: var(--open);">download_for_offline</span>
-                    <span id="btnCacheRouteOrmLabel">Zapisz mapę trasy Offline</span>
+                <button type="button" id="btnCacheRouteOrm" class="menu-btn menu-btn-secondary" onclick="window.downloadCurrentRouteMapOffline(true)" style="width: auto; margin: 0; padding: 8px 14px; min-height: 44px;" title="Status mapy trasy w bazie offline">
+                    <span class="material-symbols-outlined" id="iconCacheRouteOrm" style="color: var(--open);">download_done</span>
+                    <span id="btnCacheRouteOrmLabel">Auto-zapis mapy Offline...</span>
                 </button>
             </div>
             <div id="openRailwayMapWrapper" class="orm-map-wrapper" style="display: none;">
@@ -406,15 +541,19 @@
         <div id="detailsList" class="details-container"></div>
     </div>
          
-    <!-- Pływające przyciski (FAB) -->
-    <div id="trainFabContainer" class="fab-container" style="display: none;">
+    <!-- Pływające przyciski (FAB): Mapa + Kółko Prędkości i Statusu GPS + Wyśrodkowanie GPS -->
+    <div id="trainFabContainer" class="fab-container" style="display: none; align-items: center;">
         <button class="fab-btn" id="fabMapBtn" onclick="window.toggleOpenRailwayMap(true)" title="Mapa szlaku OpenRailwayMap">
             <span class="material-symbols-outlined">map</span>
         </button>
-        <button class="fab-btn" id="fabTimeBtn" onclick="window.locateTrainByTime()" title="Lokalizuj wg rozkładu">
-            <span class="material-symbols-outlined">schedule</span>
-        </button>
-        <button class="fab-btn fab-gps" id="fabGpsBtn" onclick="window.locateTrainByGPS()" title="Czuwak GPS">
+        <div id="fabSpeedGpsCircle" class="fab-speed-circle gps-off" onclick="window.centerOnActiveTrainPosition()" title="Aktualna prędkość pociągu i status sygnału GPS">
+            <div id="fabGpsStatusBadge" class="fab-gps-badge">
+                <span class="material-symbols-outlined" id="fabGpsStatusIcon" style="font-size: 0.92rem;">gps_searching</span>
+            </div>
+            <span id="fabSpeedValue" class="fab-speed-val">--</span>
+            <span id="fabSpeedUnit" class="fab-speed-unit">km/h</span>
+        </div>
+        <button class="fab-btn fab-gps fab-active" id="fabGpsBtn" onclick="window.centerOnActiveTrainPosition()" title="Wyśrodkuj na pozycji pociągu (Czuwak GPS)">
             <span class="material-symbols-outlined">my_location</span>
         </button>
     </div>

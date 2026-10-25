@@ -15,15 +15,14 @@ Niniejszy plik definiuje nienaruszalne reguły wytwarzania kodu, zarządzania we
 
 ---
 
-## 2. KONTROLA WERSJONOWANIA I PAMIĘCI PODRĘCZNEJ PWA (env.js)
+## 2. KONTROLA WERSJONOWANIA I KOMPILACJI APLIKACJI (www/env.js)
 
-* **Wersjonowanie WYŁĄCZNIE na wyraźne polecenie użytkownika:**
-  Nigdy nie podbijaj samodzielnie wartości `APP_VERSION` ani `APP_BUILD` w pliku `public/env.js`! Dokonuj zmiany wersji **wyłącznie wtedy, gdy użytkownik wyda bezpośrednie polecenie**. Użytkownik często publikuje kod w celu przeprowadzenia testów roboczych bez wymuszania resetu cache u klientów, a podbicie wersji następuje dopiero po pomyślnej weryfikacji.
-* **Mechanizm Cache-Busting Service Workera:**
-  Gdy użytkownik zleci podbicie wersji:
-  - `APP_BUILD` podbij o +1 (np. z `"43"` na `"44"`).
-  - `APP_VERSION` podbij zgodnie z semantyką lub poleceniem użytkownika.
-  Service Worker (`sw.js`) opiera nazwę cache na zmiennej `APP_BUILD`: `'kasy-biletowe-build-' + self.APP_BUILD`. Wymusza to natychmiastowe usunięcie starego cache u wszystkich użytkowników i pobranie świeżych plików.
+* **Zasada oznaczania wersji i kompilacji w projekcie Czuwak:**
+  Przy każdym wydaniu nowej wersji w pliku `www/env.js`:
+  - **`APP_VERSION` podbijaj o `x.x.1` (`+0.0.1`)** – np. z `"v1.1.0"` na `"v1.1.1"`, następnie `"v1.1.2"`, itd.
+  - **`APP_BUILD` podbijaj o pełne liczby całkowite (`+1`)** – np. z `"2"` na `"3"`, następnie `"4"`, itd.
+* **Mechanizm Auto-Aktualizacji APK (`checkAppUpdate`):**
+  Aplikacja porównuje zdalny plik `www/env.js` na gałęzi `main` GitHub (`https://raw.githubusercontent.com/piotrrgw/czuwak/main/www/env.js`) z lokalnym `window.APP_VERSION` oraz `window.APP_BUILD`. Podbicie `APP_VERSION` o `+0.0.1` oraz `APP_BUILD` o `+1` gwarantuje natychmiastowe wykrycie nowej wersji `.apk` przez wszystkie zainstalowane egzemplarze aplikacji.
 
 ---
 

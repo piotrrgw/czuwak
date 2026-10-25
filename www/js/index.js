@@ -447,12 +447,26 @@ window.triggerStationApproachAlert = (stationName, distanceKm, forceTest = false
     const borderCol = isAlarmLoopMode ? '#f59e0b' : 'var(--primary)';
     toast.style.cssText = 'position:fixed; top:18px; left:50%; transform:translateX(-50%); z-index:99999; max-width:94%; width:460px; padding:14px 16px; border-radius:14px; background:rgba(15, 23, 42, 0.97); border:2px solid ' + borderCol + '; box-shadow:0 12px 28px -5px rgba(0,0,0,0.75), 0 0 24px rgba(245, 158, 11, 0.35); display:flex; flex-direction:column; gap:10px; animation: slideDownToast 0.35s ease-out;';
 
-    const estTag = isEstimated ? ' (szacowane)' : '';
+    const estTag = isEstimated ? ' (estymacja w tunelu)' : '';
+    const isHandoverStation = (typeof window._crewDutyEndStationName === 'string' &&
+        window._crewDutyEndStationName &&
+        String(stationName).toUpperCase().trim() === window._crewDutyEndStationName);
+
+    const handoverButtonHtml = isHandoverStation
+        ? ('\x3Cbutton type="button" data-stname="' + escapeHTML(stationName) + '" onclick="window.completeCrewDutyAndStopCzuwak(this.dataset.stname, \'Odhaczono stację zmiany DK na banerze alarmu\')" style="width:100%; padding:11px 14px; border-radius:10px; border:1.5px solid #22c55e; background:rgba(34, 197, 94, 0.2); color:#4ade80; font-weight:900; font-size:0.9rem; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; text-transform:uppercase; letter-spacing:0.4px;"\x3E' +
+            '\x3Cspan class="material-symbols-outlined"\x3Etask_alt\x3C/span\x3E Odhacz zmianę DK i wyłącz Czuwak' +
+           '\x3C/button\x3E')
+        : '';
+
     const alarmAckButtonHtml = isAlarmLoopMode
         ? ('\x3Cbutton id="btnAckStationAlarm" type="button" onclick="window.acknowledgeStationAlarm()" style="width:100%; padding:12px 16px; border-radius:10px; border:none; background:linear-gradient(135deg, #f59e0b, #d97706); color:#fff; font-weight:900; font-size:0.96rem; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 12px rgba(245, 158, 11, 0.4); text-transform:uppercase; letter-spacing:0.5px;"\x3E' +
             '\x3Cspan class="material-symbols-outlined"\x3Enotifications_off\x3C/span\x3E Potwierdź komunikat / Wycisz Czuwak' +
            '\x3C/button\x3E')
         : '';
+
+    const headerAlertLabel = isHandoverStation
+        ? 'STACJA ZMIANY DK – KONIEC OBSŁUGI!'
+        : (isAlarmLoopMode ? 'ALARM CZUWAKA – POTWIERDŹ!' : 'Zbliżasz się do stacji');
 
     toast.innerHTML =
         '\x3Cdiv style="display:flex; align-items:center; gap:12px; width:100%;"\x3E' +
@@ -462,21 +476,23 @@ window.triggerStationApproachAlert = (stationName, distanceKm, forceTest = false
             '\x3Cdiv style="flex:1; min-width:0;"\x3E' +
                 '\x3Cdiv style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; color:' + borderCol + '; font-weight:800; display:flex; align-items:center; gap:6px;"\x3E' +
                     '\x3Cspan class="material-symbols-outlined icon-sm" style="font-size:0.9rem;"\x3Etrip_origin\x3C/span\x3E ' +
-                    (isAlarmLoopMode ? 'ALARM CZUWAKA – POTWIERDŹ!' : 'Zbliżasz się do stacji') +
+                    headerAlertLabel +
                 '\x3C/div\x3E' +
                 '\x3Cdiv id="stationApproachToastName" style="font-size:1.12rem; font-weight:800; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"\x3E' + escapeHTML(stationName) + '\x3C/div\x3E' +
                 '\x3Cdiv id="stationApproachToastDist" style="font-size:0.84rem; color:#cbd5e1; margin-top:2px;"\x3E' +
-                    'Pozostało ok. \x3Cstrong style="color:#38bdf8; font-size:1.05rem;"\x3E' + distanceKm.toFixed(1) + ' km' + estTag + '\x3C/strong\x3E. Wygłoś komunikat pożegnalny.' +
+                    'Pozostało ok. \x3Cstrong style="color:#38bdf8; font-size:1.05rem;"\x3E' + distanceKm.toFixed(1) + ' km' + estTag + '\x3C/strong\x3E. ' +
+                    (isHandoverStation ? 'Wygłoś komunikat i przygotuj się do zdania składu.' : 'Wygłoś komunikat pożegnalny.') +
                 '\x3C/div\x3E' +
             '\x3C/div\x3E' +
             '\x3Cbutton onclick="window.dismissStationApproachToast()" aria-label="Zamknij powiadomienie" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#cbd5e1; cursor:pointer; padding:6px; display:flex; align-items:center; justify-content:center;"\x3E' +
                 '\x3Cspan class="material-symbols-outlined icon-sm"\x3Eclose\x3C/span\x3E' +
             '\x3C/button\x3E' +
         '\x3C/div\x3E' +
-        alarmAckButtonHtml;
+        alarmAckButtonHtml +
+        handoverButtonHtml;
 
     // 4. Powiadomienie systemowe Android / PWA
-    const notifTitle = 'Zbliżasz się do stacji: ' + stationName;
+    const notifTitle = (isHandoverStation ? 'Stacja zmiany DK: ' : 'Zbliżasz się do stacji: ') + stationName;
     const notifBody = 'Pozostało ok. ' + distanceKm.toFixed(1) + ' km. Wygłoś komunikat pożegnalny.';
     fireNativeOrWebNotification(notifTitle, notifBody, alertKey);
 };
@@ -500,11 +516,74 @@ window.showGpsSignalWarning = (msgHtml) => {
     if (banner) banner.style.display = 'flex';
 };
 
+// ==========================================
+// KÓŁKO PRĘDKOŚCI (KM/H) I STATUSU SYGNAŁU GPS
+// ==========================================
+window.updateSpeedAndGpsIndicator = (speedKmH, gpsState = 'searching') => {
+    const circle = document.getElementById('fabSpeedGpsCircle');
+    const valEl = document.getElementById('fabSpeedValue');
+    const unitEl = document.getElementById('fabSpeedUnit');
+    const iconEl = document.getElementById('fabGpsStatusIcon');
+    if (!circle || !valEl || !iconEl) return;
+
+    circle.classList.remove('gps-ok', 'gps-bts', 'gps-tunnel', 'gps-off');
+    if (gpsState === 'ok') {
+        circle.classList.add('gps-ok');
+        iconEl.innerText = 'satellite_alt';
+        if (unitEl) unitEl.innerText = 'km/h';
+    } else if (gpsState === 'bts') {
+        circle.classList.add('gps-bts');
+        iconEl.innerText = 'cell_tower';
+        if (unitEl) unitEl.innerText = 'km/h BTS';
+    } else if (gpsState === 'tunnel') {
+        circle.classList.add('gps-tunnel');
+        iconEl.innerText = 'explore';
+        if (unitEl) unitEl.innerText = 'tunel';
+    } else if (gpsState === 'searching') {
+        circle.classList.add('gps-off');
+        iconEl.innerText = 'gps_searching';
+        if (unitEl) unitEl.innerText = 'szukam';
+    } else {
+        circle.classList.add('gps-off');
+        iconEl.innerText = 'gps_off';
+        if (unitEl) unitEl.innerText = 'wył.';
+    }
+
+    if (typeof speedKmH === 'number' && !isNaN(speedKmH) && speedKmH >= 0) {
+        valEl.innerText = String(Math.round(speedKmH));
+    } else {
+        valEl.innerText = '--';
+    }
+};
+
+window.centerOnActiveTrainPosition = () => {
+    if (window._crewDutyCompleted) {
+        if (confirm('Odcinek obsługi DK został zakończony i Czuwak jest wyłączony. Czy chcesz ponownie uruchomić śledzenie Czuwaka?')) {
+            window._crewDutyCompleted = false;
+            window.locateTrainByGPS(false);
+        }
+        return;
+    }
+    if (window.activeTrackingMode !== 'gps') {
+        window.locateTrainByGPS(false);
+        return;
+    }
+    const rowToCenter = document.querySelector('.train-moving-row') ||
+                        document.querySelector('.station-standing-train-row') ||
+                        document.querySelector('.train-route-table tr.active-station-row');
+    if (rowToCenter) {
+        window.centerOnElement(rowToCenter);
+    } else {
+        window.locateTrainByGPS(false);
+    }
+};
+
 window.stopTrainTracking = () => {
     window.activeTrackingMode = null;
     window.releaseWakeLock();
     window.stopAlarmLoop();
     window.hideGpsSignalWarning();
+    window.updateSpeedAndGpsIndicator(null, 'off');
     if (window._trainGpsWatchId !== null && window._trainGpsWatchId !== undefined) {
         try { navigator.geolocation.clearWatch(window._trainGpsWatchId); } catch (e) {}
         window._trainGpsWatchId = null;
@@ -522,13 +601,40 @@ window.stopTrainTracking = () => {
         gpsBtn.classList.remove('fab-active');
         gpsBtn.innerHTML = '\x3Cspan class="material-symbols-outlined"\x3Emy_location\x3C/span\x3E';
     }
-    const timeBtn = document.getElementById('fabTimeBtn');
-    if (timeBtn) {
-        timeBtn.classList.remove('fab-active');
-        timeBtn.innerHTML = '\x3Cspan class="material-symbols-outlined"\x3Eschedule\x3C/span\x3E';
-    }
     document.querySelectorAll('.gps-distance-indicator').forEach(el => el.remove());
     if (typeof window.dismissStationApproachToast === 'function') window.dismissStationApproachToast();
+};
+
+// Samoczynne wyłączenie Czuwaka po odhaczeniu / osiągnięciu stacji zmiany DK
+window.completeCrewDutyAndStopCzuwak = (stationName, reasonText = '') => {
+    window._crewDutyCompleted = true;
+    window.stopTrainTracking();
+
+    const bannerEl = document.getElementById('crewDutyStatusHeader');
+    if (bannerEl) {
+        bannerEl.style.background = 'rgba(34, 197, 94, 0.16)';
+        bannerEl.style.borderColor = '#22c55e';
+        bannerEl.innerHTML =
+            '\x3Cdiv style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:10px; flex-wrap:wrap;"\x3E' +
+                '\x3Cdiv style="display:flex; align-items:center; gap:8px; color:#4ade80; font-weight:800; font-size:0.9rem;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined"\x3Etask_alt\x3C/span\x3E' +
+                    '\x3Cspan\x3EZakończono obsługę DK na stacji \x3Cstrong style="color:#fff;"\x3E' + escapeHTML(stationName || window._crewDutyEndStationName || '') + '\x3C/strong\x3E – Czuwak wyłączył się samoczynnie' +
+                    (reasonText ? (' (' + escapeHTML(reasonText) + ')') : '') + '.\x3C/span\x3E' +
+                '\x3C/div\x3E' +
+                '\x3Cbutton type="button" onclick="window.resumeCrewDutyCzuwak()" style="padding:6px 12px; border-radius:8px; border:1px solid var(--primary); background:var(--input-bg); color:var(--primary); font-weight:800; font-size:0.78rem; cursor:pointer;"\x3EWznów Czuwak\x3C/button\x3E' +
+            '\x3C/div\x3E';
+    }
+
+    fireNativeOrWebNotification(
+        'Koniec odcinka obsługi DK: ' + (stationName || ''),
+        'Stacja zmiany DK została odhaczona. Czuwak wyłączył się automatycznie.',
+        'DUTY_END_' + Date.now()
+    );
+};
+
+window.resumeCrewDutyCzuwak = () => {
+    window._crewDutyCompleted = false;
+    window.triggerSearch();
 };
 
 // ==========================================
@@ -952,10 +1058,12 @@ window.checkAppUpdate = async function(isManual = false, dbStatusData = null) {
                 const remoteVer = verMatch ? verMatch[1] : null;
                 const remoteBuild = buildMatch ? buildMatch[1] : null;
                 if (remoteVer) {
-                    const remoteScore = parseVersionScore(remoteVer, remoteBuild || '001');
-                    if (remoteScore > currentScore) {
+                    const remoteScore = parseVersionScore(remoteVer, remoteBuild || '1');
+                    const curBuildInt = parseInt(String(window.APP_BUILD || '1').replace(/^0+/, '') || '1', 10);
+                    const remBuildInt = parseInt(String(remoteBuild || '1').replace(/^0+/, '') || '1', 10);
+                    if (remBuildInt > curBuildInt || remoteScore > currentScore) {
                         foundNewer = true;
-                        detectedLabel = remoteVer + (remoteBuild ? (' (' + remoteBuild + ')') : '');
+                        detectedLabel = remoteVer + (remoteBuild ? (' (kompilacja ' + remoteBuild + ')') : '');
                     }
                 }
             }
@@ -1578,22 +1686,34 @@ window.downloadPolandOrmBaseOffline = async function(isManual = false) {
     }
 };
 
-// Pobranie szczegółowych kafelków OpenRailwayMap (zoom 8..11) wzdłuż aktualnie wybranej trasy pociągu
-window.downloadCurrentRouteMapOffline = async function() {
-    if (!navigator.onLine) {
-        alert('Brak połączenia z internetem. Korzystasz z kafelków zapisanych już w bazie Offline.');
-        return;
-    }
+// Automatyczne / ręczne pobranie szczegółowych kafelków OpenRailwayMap (zoom 8..11) wzdłuż aktualnie wybranej trasy pociągu
+window._activeRouteCacheTaskKey = null;
+window.downloadCurrentRouteMapOffline = async function(isManual = false) {
     const pts = window._currentRouteStationsWithGps || [];
     if (pts.length === 0) {
-        alert('Najpierw wybierz pociąg, aby pobrać mapę jego trasy do bazy Offline.');
+        if (isManual) alert('Najpierw wybierz pociąg, aby pobrać mapę jego trasy do bazy Offline.');
         return;
     }
 
     const btn = document.getElementById('btnCacheRouteOrm');
     const lbl = document.getElementById('btnCacheRouteOrmLabel');
+    const iconEl = document.getElementById('iconCacheRouteOrm');
+
+    if (!navigator.onLine) {
+        if (lbl) lbl.innerText = 'Mapa trasy z pamięci Offline';
+        if (isManual) alert('Brak połączenia z internetem. Korzystasz z kafelków zapisanych już w bazie Offline.');
+        return;
+    }
+
+    const routeKey = (window._currentActiveTrainNumber || 'TR') + '_' + pts.length + '_' + (pts[0]?.name || '') + '_' + (pts[pts.length - 1]?.name || '');
+    if (!isManual && window._activeRouteCacheTaskKey === routeKey) {
+        return;
+    }
+    window._activeRouteCacheTaskKey = routeKey;
+
     if (btn) btn.disabled = true;
-    if (lbl) lbl.innerText = 'Pobieranie trasy (0%)...';
+    if (iconEl) iconEl.innerText = 'downloading';
+    if (lbl) lbl.innerText = 'Auto-pobieranie mapy trasy (0%)...';
 
     const tileMap = new Map();
     const addTilePair = (z, x, y) => {
@@ -1638,17 +1758,19 @@ window.downloadCurrentRouteMapOffline = async function() {
     let done = 0;
     const batchSize = 8;
     for (let i = 0; i < entries.length; i += batchSize) {
+        if (window._activeRouteCacheTaskKey !== routeKey) return;
         const chunk = entries.slice(i, i + batchSize);
         await Promise.allSettled(chunk.map(([k, u]) => fetchAndCacheSingleTile('', u, k)));
         done += chunk.length;
         if (lbl) {
             const pct = Math.min(100, Math.round((done / entries.length) * 100));
-            lbl.innerText = 'Pobieranie (' + pct + '%)...';
+            lbl.innerText = 'Mapa trasy Offline (' + pct + '%)...';
         }
     }
 
     if (btn) btn.disabled = false;
-    if (lbl) lbl.innerText = 'Mapa trasy zapisana Offline ✓';
+    if (iconEl) iconEl.innerText = 'download_done';
+    if (lbl) lbl.innerText = 'Mapa trasy pobrana Offline ✓';
     const badge = document.getElementById('ormOfflineBadge');
     if (badge) badge.innerText = 'Trasa zapisana w bazie Offline (' + entries.length + ' warstw)';
     window.updateStats();
@@ -1965,6 +2087,9 @@ window.clearSearch = (inputId) => {
     const ormSec = document.getElementById('openRailwayMapSection');
     if (ormSec) ormSec.style.display = 'none';
 
+    const dutyBox = document.getElementById('crewDutyConfigBox');
+    if (dutyBox) dutyBox.style.display = 'none';
+
     const fabContainer = document.getElementById('trainFabContainer');
     if (fabContainer) fabContainer.style.display = 'none';
 
@@ -2254,6 +2379,8 @@ function wyswietlWidok() {
         if (!nrPociagu || nrPociagu.length < 2) {
             window.stopTrainTracking();
             if (ormSec) ormSec.style.display = 'none';
+            const dutyBox = document.getElementById('crewDutyConfigBox');
+            if (dutyBox) dutyBox.style.display = 'none';
             const fabContainer = document.getElementById('trainFabContainer');
             if (fabContainer) fabContainer.style.display = 'none';
             return;
@@ -2275,6 +2402,8 @@ function wyswietlWidok() {
         if (pociagi.length === 0) {
             window.stopTrainTracking();
             if (ormSec) ormSec.style.display = 'none';
+            const dutyBox = document.getElementById('crewDutyConfigBox');
+            if (dutyBox) dutyBox.style.display = 'none';
             const fabContainer = document.getElementById('trainFabContainer');
             if (fabContainer) fabContainer.style.display = 'none';
             listContainer.innerHTML = '\x3Cp style="text-align:center; color:var(--text-muted); padding: 20px;"\x3EBrak pociągu o numerze ' + escapeHTML(nrPociagu) + ' w bazie.\x3C/p\x3E';
@@ -2286,6 +2415,8 @@ function wyswietlWidok() {
         if (!nazwaPociagu || nazwaPociagu.length < 3) {
             window.stopTrainTracking();
             if (ormSec) ormSec.style.display = 'none';
+            const dutyBox = document.getElementById('crewDutyConfigBox');
+            if (dutyBox) dutyBox.style.display = 'none';
             const fabContainer = document.getElementById('trainFabContainer');
             if (fabContainer) fabContainer.style.display = 'none';
             return;
@@ -2295,6 +2426,8 @@ function wyswietlWidok() {
         if (pociagi.length === 0) {
             window.stopTrainTracking();
             if (ormSec) ormSec.style.display = 'none';
+            const dutyBox = document.getElementById('crewDutyConfigBox');
+            if (dutyBox) dutyBox.style.display = 'none';
             const fabContainer = document.getElementById('trainFabContainer');
             if (fabContainer) fabContainer.style.display = 'none';
             listContainer.innerHTML = '\x3Cp style="text-align:center; color:var(--text-muted); padding: 20px;"\x3EBrak pociągu o nazwie "' + escapeHTML(nazwaPociagu) + '" w bazie.\x3C/p\x3E';
@@ -2356,24 +2489,94 @@ function wyswietlWidok() {
         });
         listContainer.innerHTML = wariantyHtml;
         listContainer.style.display = 'block';
+        const dutyBox = document.getElementById('crewDutyConfigBox');
+        if (dutyBox) dutyBox.style.display = 'none';
     }
 }
 
+window._crewDutyStartIdx = 0;
+window._crewDutyEndIdx = 0;
+window._crewDutyEndStationName = '';
+window._crewDutyCompleted = false;
+window._currentTrainObject = null;
+
+window.onCrewDutySegmentChange = () => {
+    const startSel = document.getElementById('dutyStartStationSelect');
+    const endSel = document.getElementById('dutyEndStationSelect');
+    if (!startSel || !endSel) return;
+
+    let sIdx = parseInt(startSel.value, 10) || 0;
+    let eIdx = parseInt(endSel.value, 10) || 0;
+    const maxIdx = endSel.options.length - 1;
+
+    if (sIdx >= eIdx) {
+        if (sIdx < maxIdx) {
+            eIdx = sIdx + 1;
+            endSel.value = String(eIdx);
+        } else {
+            sIdx = Math.max(0, eIdx - 1);
+            startSel.value = String(sIdx);
+        }
+    }
+
+    window._crewDutyStartIdx = sIdx;
+    window._crewDutyEndIdx = eIdx;
+    window._crewDutyCompleted = false;
+
+    const trainNum = window._currentActiveTrainNumber || '';
+    if (trainNum) {
+        try {
+            localStorage.setItem('CZUWAK_DUTY_SEG_' + trainNum, JSON.stringify({ startIdx: sIdx, endIdx: eIdx }));
+        } catch (e) {}
+    }
+
+    if (window._currentTrainObject) {
+        generujWidokTrasy(
+            window._currentTrainObject,
+            document.getElementById('detailsList'),
+            document.getElementById('mainStatusBox'),
+            window._currentTrainBestMatch
+        );
+    }
+};
+
+window.setCrewDutyEndStation = (endIdx) => {
+    const endSel = document.getElementById('dutyEndStationSelect');
+    const startSel = document.getElementById('dutyStartStationSelect');
+    if (!endSel) return;
+    const targetEnd = parseInt(endIdx, 10);
+    if (isNaN(targetEnd)) return;
+    if (startSel && parseInt(startSel.value, 10) >= targetEnd) {
+        startSel.value = String(Math.max(0, targetEnd - 1));
+    }
+    endSel.value = String(targetEnd);
+    window.onCrewDutySegmentChange();
+};
+
 function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
+    window._currentTrainObject = pociag;
     const fabContainer = document.getElementById('trainFabContainer');
     if (fabContainer) fabContainer.style.display = 'flex';
 
-    // Reset pamięci odwiedzonych stacji i delty odległości dla nowego pociągu
-    window._passedStationIndices = new Set();
-    window._prevStationDistances = {};
+    const stacjeArray = Array.isArray(pociag.stacje) ? pociag.stacje : Object.values(pociag.stacje || {});
+    const totalStations = stacjeArray.length;
 
-    if (pociag && pociag.numer) {
-        window._currentActiveTrainNumber = String(pociag.numer).trim();
+    const cleanTrainNum = pociag && pociag.numer ? String(pociag.numer).trim() : '';
+    const isNewTrainSelection = (window._currentActiveTrainNumber !== cleanTrainNum);
+
+    if (isNewTrainSelection) {
+        window._passedStationIndices = new Set();
+        window._prevStationDistances = {};
+        window._crewDutyCompleted = false;
+        window._smoothedSpeedKmH = null;
         if (window._stationApproachAlertsFired) window._stationApproachAlertsFired.clear();
         if (window._alarmAcknowledgedForKey) window._alarmAcknowledgedForKey.clear();
-        const stacjeArray = Array.isArray(pociag.stacje) ? pociag.stacje : Object.values(pociag.stacje || {});
-        const firstSt = stacjeArray.length > 0 ? stacjeArray[0] : null;
-        const lastSt = stacjeArray.length > 0 ? stacjeArray[stacjeArray.length - 1] : null;
+    }
+
+    if (cleanTrainNum) {
+        window._currentActiveTrainNumber = cleanTrainNum;
+        const firstSt = totalStations > 0 ? stacjeArray[0] : null;
+        const lastSt = totalStations > 0 ? stacjeArray[totalStations - 1] : null;
         const pierwszaStacja = firstSt ? (typeof firstSt === 'string' ? firstSt : (firstSt.nazwa || '')) : '';
         const ostatniaStacja = lastSt ? (typeof lastSt === 'string' ? lastSt : (lastSt.nazwa || '')) : '';
         let relacjaStr = (pierwszaStacja && ostatniaStacja) ? (pierwszaStacja + ' \u2192 ' + ostatniaStacja) : '';
@@ -2384,8 +2587,82 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
         });
     }
 
+    // Konfiguracja odcinka obsługi DK (Stacja objęcia -> Stacja zmiany DK)
+    let savedStartIdx = 0;
+    let savedEndIdx = Math.max(0, totalStations - 1);
+    if (cleanTrainNum) {
+        try {
+            const rawSaved = localStorage.getItem('CZUWAK_DUTY_SEG_' + cleanTrainNum);
+            if (rawSaved) {
+                const parsed = JSON.parse(rawSaved);
+                if (typeof parsed.startIdx === 'number' && typeof parsed.endIdx === 'number') {
+                    savedStartIdx = Math.max(0, Math.min(totalStations - 2, parsed.startIdx));
+                    savedEndIdx = Math.max(savedStartIdx + 1, Math.min(totalStations - 1, parsed.endIdx));
+                }
+            }
+        } catch (e) {}
+    }
+    window._crewDutyStartIdx = savedStartIdx;
+    window._crewDutyEndIdx = savedEndIdx;
+
+    const stationNamesUpper = stacjeArray.map(stObj => {
+        const raw = typeof stObj === 'string' ? stObj : (stObj && stObj.nazwa ? stObj.nazwa : '');
+        return String(raw).toUpperCase().trim();
+    });
+    window._crewDutyEndStationName = stationNamesUpper[window._crewDutyEndIdx] || '';
+    const crewStartStationName = stationNamesUpper[window._crewDutyStartIdx] || '';
+
+    // Wypełnij selektory odcinka obsługi DK w panelu "Skonfiguruj pociąg"
+    const dutyBox = document.getElementById('crewDutyConfigBox');
+    const startSel = document.getElementById('dutyStartStationSelect');
+    const endSel = document.getElementById('dutyEndStationSelect');
+    if (dutyBox && startSel && endSel && totalStations >= 2) {
+        dutyBox.style.display = 'block';
+        let startOptsHtml = '';
+        let endOptsHtml = '';
+        stacjeArray.forEach((stObj, idx) => {
+            const stName = stationNamesUpper[idx] || ('Stacja ' + (idx + 1));
+            const depStr = (typeof stObj === 'object' && stObj && stObj.odjazd && stObj.odjazd !== '-') ? (' (odj. ' + stObj.odjazd + ')') : '';
+            const arrStr = (typeof stObj === 'object' && stObj && stObj.przyjazd && stObj.przyjazd !== '-') ? (' (przyj. ' + stObj.przyjazd + ')') : '';
+            if (idx < totalStations - 1) {
+                startOptsHtml += '\x3Coption value="' + idx + '"' + (idx === window._crewDutyStartIdx ? ' selected' : '') + '\x3E' +
+                    (idx + 1) + '. ' + escapeHTML(stName + depStr) + '\x3C/option\x3E';
+            }
+            if (idx > 0) {
+                endOptsHtml += '\x3Coption value="' + idx + '"' + (idx === window._crewDutyEndIdx ? ' selected' : '') + '\x3E' +
+                    (idx + 1) + '. ' + escapeHTML(stName + arrStr) + '\x3C/option\x3E';
+            }
+        });
+        startSel.innerHTML = startOptsHtml;
+        endSel.innerHTML = endOptsHtml;
+    }
+
     const matchedDate = bestMatch && bestMatch.date ? escapeHTML(bestMatch.date) : 'Wybrana data';
     const currentDistStr = window.getAlertDistanceKm().toFixed(1) + ' km';
+
+    const dutyStatusHeaderHtml = window._crewDutyCompleted
+        ? ('\x3Cdiv id="crewDutyStatusHeader" style="background: rgba(34, 197, 94, 0.16); border-bottom: 1.5px solid #22c55e; padding: 10px 15px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;"\x3E' +
+               '\x3Cdiv style="display:flex; align-items:center; gap:8px; color:#4ade80; font-weight:800; font-size:0.88rem;"\x3E' +
+                   '\x3Cspan class="material-symbols-outlined"\x3Etask_alt\x3C/span\x3E' +
+                   '\x3Cspan\x3EZakończono obsługę DK na stacji \x3Cstrong style="color:#fff;"\x3E' + escapeHTML(window._crewDutyEndStationName) + '\x3C/strong\x3E – Czuwak wyłączony.\x3C/span\x3E' +
+               '\x3C/div\x3E' +
+               '\x3Cbutton type="button" onclick="window.resumeCrewDutyCzuwak()" style="padding:6px 12px; border-radius:8px; border:1px solid var(--primary); background:var(--input-bg); color:var(--primary); font-weight:800; font-size:0.78rem; cursor:pointer;"\x3EWznów Czuwak\x3C/button\x3E' +
+           '\x3C/div\x3E')
+        : ('\x3Cdiv id="crewDutyStatusHeader" style="background: var(--toggle-bg); padding: 11px 15px; font-size: 0.88rem; border-bottom: 1px solid var(--table-border); display: flex; flex-direction: column; gap: 6px;"\x3E' +
+               '\x3Cdiv style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;"\x3E' +
+                   '\x3Cdiv style="display:flex; align-items: center; gap: 6px; color: var(--text);"\x3E' +
+                       '\x3Cspan class="material-symbols-outlined icon-sm" style="color: var(--primary);"\x3Ecalendar_month\x3C/span\x3E ' +
+                       '\x3Cspan\x3EWyjazd: \x3Cstrong style="color: var(--text);"\x3E' + matchedDate + '\x3C/strong\x3E\x3C/span\x3E' +
+                   '\x3C/div\x3E' +
+                   '\x3Cspan style="display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:999px; background:rgba(34, 197, 94, 0.16); border:1px solid #22c55e; color:#4ade80; font-size:0.76rem; font-weight:800;"\x3E' +
+                       '\x3Cspan class="material-symbols-outlined" style="font-size:0.95rem; animation:train-pulse 1.5s infinite;"\x3Eradar\x3C/span\x3E ' +
+                       'Czuwak aktywny (' + currentDistStr + ')' +
+                   '\x3C/span\x3E' +
+               '\x3C/div\x3E' +
+               '\x3Cdiv style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; font-size:0.8rem; color:var(--text-muted); padding-top:4px; border-top:1px dashed var(--glass-border);"\x3E' +
+                   '\x3Cspan\x3EOdcinek DK: \x3Cstrong style="color:#22c55e;"\x3E' + escapeHTML(crewStartStationName) + '\x3C/strong\x3E \u2192 \x3Cstrong style="color:#f59e0b;"\x3E' + escapeHTML(window._crewDutyEndStationName) + '\x3C/strong\x3E (auto-wyłączenie)\x3C/span\x3E' +
+               '\x3C/div\x3E' +
+           '\x3C/div\x3E');
 
     let html = '\x3Cdiv class="card glass-panel" style="border-left-color: var(--primary); padding: 0;"\x3E' +
         '\x3Cdiv class="card-header" style="background: var(--primary); color: var(--primary-text);"\x3E' +
@@ -2393,19 +2670,7 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
                 '\x3Cspan class="material-symbols-outlined"\x3Eroute\x3C/span\x3E Trasa pociągu' +
             '\x3C/div\x3E' +
         '\x3C/div\x3E' +
-        '\x3Cdiv style="background: var(--toggle-bg); padding: 12px 15px; font-size: 0.95rem; border-bottom: 1px solid var(--table-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;"\x3E' +
-            '\x3Cdiv style="display:flex; align-items: flex-start; gap: 8px; color: var(--text);"\x3E' +
-                '\x3Cspan class="material-symbols-outlined icon-sm" style="color: var(--primary); margin-top: 2px;"\x3Ecalendar_month\x3C/span\x3E ' +
-                '\x3Cdiv\x3E' +
-                    '\x3Cstrong style="color: var(--primary);"\x3EData wyjazdu pociągu:\x3C/strong\x3E \x3Cbr\x3E' +
-                    '\x3Cspan style="line-height: 1.4; font-size: 1.02rem; font-weight: 700;"\x3E' + matchedDate + '\x3C/span\x3E' +
-                '\x3C/div\x3E' +
-            '\x3C/div\x3E' +
-            '\x3Cbutton type="button" onclick="window.locateTrainByGPS()" style="background: var(--primary); color: #fff; border: none; border-radius: 8px; padding: 10px 14px; font-weight: 700; font-size: 0.88rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);"\x3E' +
-                '\x3Cspan class="material-symbols-outlined icon-sm"\x3Emy_location\x3C/span\x3E ' +
-                '\x3Cspan id="routeCardGpsBtnLabel"\x3EWłącz Czuwak GPS (' + currentDistStr + ')\x3C/span\x3E' +
-            '\x3C/button\x3E' +
-        '\x3C/div\x3E' +
+        dutyStatusHeaderHtml +
         '\x3Ctable class="train-route-table"\x3E' +
         '\x3Cthead\x3E' +
             '\x3Ctr\x3E' +
@@ -2416,7 +2681,6 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
         '\x3C/thead\x3E' +
         '\x3Ctbody\x3E';
 
-    const stacjeArray = Array.isArray(pociag.stacje) ? pociag.stacje : Object.values(pociag.stacje || {});
     const absTimes = computeTrainAbsSchedule(stacjeArray);
     window._currentTrainBestMatch = bestMatch;
 
@@ -2447,8 +2711,7 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
     }
 
     stacjeArray.forEach((stacjaObj, idx) => {
-        const stacjaNazwaObj = typeof stacjaObj === 'string' ? stacjaObj : (stacjaObj && stacjaObj.nazwa ? stacjaObj.nazwa : '');
-        const stacjaNazwa = String(stacjaNazwaObj).toUpperCase().trim();
+        const stacjaNazwa = stationNamesUpper[idx] || '';
         const arrStr = typeof stacjaObj === 'object' && stacjaObj !== null && stacjaObj.przyjazd ? String(stacjaObj.przyjazd) : '-';
         const depStr = typeof stacjaObj === 'object' && stacjaObj !== null && stacjaObj.odjazd ? String(stacjaObj.odjazd) : '-';
 
@@ -2474,11 +2737,36 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
             }
         }
 
+        const isOutsideDuty = (idx < window._crewDutyStartIdx || idx > window._crewDutyEndIdx);
         let rowClass = (idx === activeStationIndex) ? 'active-station-row station-with-train' : '';
+        if (isOutsideDuty) rowClass = (rowClass ? rowClass + ' ' : '') + 'outside-duty-row';
 
         const stAbs = absTimes[idx] || { arr: null, dep: null, onlyBoarding: false, onlyAlighting: false };
         const absArrAttr = (stAbs.arr !== null) ? ' data-abs-arr="' + stAbs.arr + '"' : '';
         const absDepAttr = (stAbs.dep !== null) ? ' data-abs-dep="' + stAbs.dep + '"' : '';
+
+        let dutyRoleBadgeHtml = '';
+        if (idx === window._crewDutyStartIdx) {
+            dutyRoleBadgeHtml =
+                '\x3Cdiv style="margin-top:4px; display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:6px; background:rgba(34, 197, 94, 0.16); border:1px solid #22c55e; color:#4ade80; font-size:0.68rem; font-weight:800;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined" style="font-size:0.85rem;"\x3Elogin\x3C/span\x3E OBJĘCIE SKŁADU (START DK)' +
+                '\x3C/div\x3E';
+        } else if (idx === window._crewDutyEndIdx) {
+            dutyRoleBadgeHtml =
+                '\x3Cdiv style="margin-top:5px; display:flex; flex-wrap:wrap; align-items:center; gap:6px;"\x3E' +
+                    '\x3Cspan style="display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:6px; background:rgba(245, 158, 11, 0.2); border:1px solid #f59e0b; color:#fbbf24; font-size:0.68rem; font-weight:800;"\x3E' +
+                        '\x3Cspan class="material-symbols-outlined" style="font-size:0.85rem;"\x3Elogout\x3C/span\x3E STACJA ZMIANY DK (AUTO-WYŁĄCZENIE)' +
+                    '\x3C/span\x3E' +
+                    (!window._crewDutyCompleted
+                        ? ('\x3Cbutton type="button" data-stname="' + escapeHTML(stacjaNazwa) + '" onclick="window.completeCrewDutyAndStopCzuwak(this.dataset.stname, \'Odhaczono ręcznie\')" style="padding:3px 8px; border-radius:6px; border:1px solid #22c55e; background:rgba(34, 197, 94, 0.2); color:#4ade80; font-size:0.68rem; font-weight:800; cursor:pointer;"\x3E✓ Odhacz i wyłącz Czuwak\x3C/button\x3E')
+                        : '') +
+                '\x3C/div\x3E';
+        } else if (idx > window._crewDutyStartIdx) {
+            dutyRoleBadgeHtml =
+                '\x3Cdiv style="margin-top:3px;"\x3E' +
+                    '\x3Cbutton type="button" data-stidx="' + idx + '" onclick="window.setCrewDutyEndStation(this.dataset.stidx)" style="padding:2px 7px; border-radius:5px; border:1px dashed var(--glass-border); background:transparent; color:var(--text-muted); font-size:0.65rem; font-weight:600; cursor:pointer;"\x3EUstaw zmianę DK tutaj\x3C/button\x3E' +
+                '\x3C/div\x3E';
+        }
 
         let arrCellHtml = escapeHTML(arrStr);
         if (stAbs.onlyBoarding) {
@@ -2489,10 +2777,11 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
             depCellHtml = '-\x3Cdiv style="font-size: 0.7rem; color: var(--warning, #f59e0b); font-weight: 600; line-height: 1.15; margin-top: 2px;"\x3ETylko wysiadanie (~1m)\x3C/div\x3E';
         }
 
-        html += '\x3Ctr class="' + rowClass + '"' + absArrAttr + absDepAttr + '\x3E' +
+        html += '\x3Ctr class="' + rowClass + '" data-station-idx="' + idx + '"' + absArrAttr + absDepAttr + '\x3E' +
             '\x3Ctd class="station-name-td" data-label="Stacja"\x3E' +
                 '\x3Cdiv class="station-cell-wrapper"\x3E' +
                     '\x3Cspan class="station-clickable" style="text-decoration:none; cursor:default;"\x3E' + escapeHTML(stacjaNazwa) + '\x3C/span\x3E' +
+                    dutyRoleBadgeHtml +
                 '\x3C/div\x3E' +
             '\x3C/td\x3E' +
             '\x3Ctd data-label="Przyjazd:"\x3E' + arrCellHtml + '\x3C/td\x3E' +
@@ -2547,11 +2836,13 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
     const ormSec = document.getElementById('openRailwayMapSection');
     if (ormSec) {
         ormSec.style.display = 'block';
-        const lbl = document.getElementById('btnCacheRouteOrmLabel');
-        if (lbl) lbl.innerText = 'Zapisz mapę trasy Offline';
         const wrapper = document.getElementById('openRailwayMapWrapper');
         if (wrapper && wrapper.style.display === 'block') {
             window.initOrUpdateOpenRailwayMap();
+        }
+        // AUTOMATYCZNE POBRANIE MAPY TRASY DO BAZY OFFLINE PO WYBRANIU POCIĄGU
+        if (routeCoords.length > 0) {
+            window.downloadCurrentRouteMapOffline(false);
         }
     }
 
@@ -2561,160 +2852,16 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
     mainBox.innerText = "POCIĄG - " + escapeHTML(pociag.nazwa || '') + " (" + escapeHTML(pociag.numer) + ")";
     listContainer.style.display = 'block';
 
-    if (activeStationIndex !== -1) {
-        window.centerOnElement(document.querySelector('.train-route-table tr.active-station-row'));
-    } else if (activeBetweenIndex !== -1) {
-        window.centerOnElement(document.querySelector('.train-route-table tr.train-moving-row'));
+    // AUTOMATYCZNE URUCHOMIENIE CZUWAKA GPS DLA WYBRANEGO POCIĄGU (DOPÓKI ODCINEK OBSŁUGI TRWA)
+    if (!window._crewDutyCompleted) {
+        window.locateTrainByGPS(true);
+    } else {
+        window.updateSpeedAndGpsIndicator(null, 'off');
     }
 }
 
 // ==========================================
-// LOKALIZACJA WG ROZKŁADU JAZDY (IKONA ZEGARA)
-// ==========================================
-window.locateTrainByTime = (silent = false) => {
-    const rows = Array.from(document.querySelectorAll('.train-route-table tr'));
-    if (rows.length === 0) return !silent && alert("Najpierw wyszukaj trasę pociągu!");
-
-    window.activeTrackingMode = 'time';
-    window.hideGpsSignalWarning();
-
-    if (window._trainGpsWatchId !== null && window._trainGpsWatchId !== undefined) {
-        try { navigator.geolocation.clearWatch(window._trainGpsWatchId); } catch (e) {}
-        window._trainGpsWatchId = null;
-    }
-    if (window._trainGpsPollInterval) {
-        clearInterval(window._trainGpsPollInterval);
-        window._trainGpsPollInterval = null;
-    }
-    if (window._gpsWatchdogInterval) {
-        clearInterval(window._gpsWatchdogInterval);
-        window._gpsWatchdogInterval = null;
-    }
-    const gpsBtn = document.getElementById('fabGpsBtn');
-    if (gpsBtn) {
-        gpsBtn.classList.remove('fab-active');
-        gpsBtn.innerHTML = '\x3Cspan class="material-symbols-outlined"\x3Emy_location\x3C/span\x3E';
-    }
-    document.querySelectorAll('.gps-distance-indicator').forEach(el => el.remove());
-    window.dismissStationApproachToast();
-
-    const btn = document.getElementById('fabTimeBtn');
-    if (btn) btn.classList.add('fab-active');
-    if (!silent && btn) {
-        btn.innerHTML = '\x3Cspan class="material-symbols-outlined spin"\x3Esync\x3C/span\x3E';
-    }
-
-    setTimeout(() => {
-        const now = new Date();
-        let currentMinutes = now.getHours() * 60 + now.getMinutes();
-        let targetRow = null;
-        let standingRow = null;
-        let parsedRows = [];
-
-        const stationRows = rows.filter(r => !r.querySelector('th') && !r.classList.contains('train-moving-row') && !r.classList.contains('station-standing-train-row'));
-
-        for (let i = 0; i < stationRows.length; i++) {
-            const row = stationRows[i];
-            if (row.dataset.absArr !== undefined && row.dataset.absDep !== undefined) {
-                const absArr = parseInt(row.dataset.absArr, 10);
-                const absDep = parseInt(row.dataset.absDep, 10);
-                if (!isNaN(absArr) && !isNaN(absDep)) {
-                    parsedRows.push({ row: row, absArr: absArr, absDep: absDep, absMin: absDep });
-                }
-            }
-        }
-
-        if (parsedRows.length > 0) {
-            const firstStation = parsedRows[0];
-            const originDep = firstStation.absDep;
-            const originWindowStart = Math.max(0, originDep - 10);
-
-            if (window._currentTrainBestMatch && typeof window._currentTrainBestMatch.daysAgo === 'number') {
-                currentMinutes = currentMinutes + window._currentTrainBestMatch.daysAgo * 1440;
-            }
-
-            for (let i = 0; i < parsedRows.length; i++) {
-                const effArr = (i === 0) ? originWindowStart : parsedRows[i].absArr;
-                if (currentMinutes >= effArr && currentMinutes <= parsedRows[i].absDep) {
-                    standingRow = parsedRows[i].row;
-                    break;
-                }
-            }
-
-            if (!standingRow) {
-                for (let i = 0; i < parsedRows.length - 1; i++) {
-                    const curDep = parsedRows[i].absDep;
-                    const nextArr = parsedRows[i + 1].absArr;
-                    if (currentMinutes > curDep && currentMinutes < nextArr) {
-                        targetRow = parsedRows[i + 1].row;
-                        break;
-                    }
-                }
-            }
-        }
-
-        document.querySelectorAll('.train-moving-row').forEach(el => el.remove());
-        document.querySelectorAll('.station-standing-train-row').forEach(el => el.remove());
-        document.querySelectorAll('.train-route-table tr.active-station-row').forEach(el => {
-            el.classList.remove('active-station-row', 'station-with-train');
-        });
-
-        if (standingRow) {
-            standingRow.classList.add('active-station-row', 'station-with-train');
-            const stationNameEl = standingRow.querySelector('.station-clickable') || standingRow.querySelector('td');
-            const stationName = stationNameEl ? stationNameEl.innerText.trim() : '';
-            const isOriginStation = (parsedRows.length > 0 && standingRow === parsedRows[0].row);
-
-            let standingBadgeText = 'Planowy postój pociągu na stacji: ' + escapeHTML(stationName);
-            if (isOriginStation) {
-                const minsLeft = parsedRows[0].absDep - currentMinutes;
-                standingBadgeText = minsLeft > 0
-                    ? 'Pociąg na stacji początkowej ' + escapeHTML(stationName) + ' (planowy odjazd za ' + minsLeft + ' min)'
-                    : 'Pociąg na stacji początkowej ' + escapeHTML(stationName) + ' (planowy odjazd za chwilę)';
-            }
-
-            const standingTr = document.createElement('tr');
-            standingTr.className = 'station-standing-train-row active-station-row';
-            standingTr.innerHTML =
-                '\x3Ctd colspan="3" style="padding: 0; border: none; background: transparent;"\x3E' +
-                    '\x3Cdiv class="station-standing-box"\x3E' +
-                        '\x3Cdiv class="station-standing-badge"\x3E' +
-                            '\x3Cspan class="material-symbols-outlined icon-sm"\x3Eschedule\x3C/span\x3E ' +
-                            standingBadgeText +
-                        '\x3C/div\x3E' +
-                        '\x3Cdiv class="table-train-container standing-station-container"\x3E' +
-                            (typeof window.getStandingTrainIndicatorHTML === 'function' ? window.getStandingTrainIndicatorHTML(5, stationName) : '') +
-                        '\x3C/div\x3E' +
-                    '\x3C/div\x3E' +
-                '\x3C/td\x3E';
-            standingRow.parentNode.insertBefore(standingTr, standingRow.nextSibling);
-            if (!silent) window.centerOnElement(standingRow);
-        } else if (targetRow) {
-            const indicatorTr = document.createElement('tr');
-            indicatorTr.className = 'train-moving-row';
-            indicatorTr.innerHTML =
-                '\x3Ctd colspan="3" style="padding: 0; border: none;"\x3E' +
-                    '\x3Cdiv style="background: rgba(2, 132, 199, 0.1); display: flex; flex-direction: column; padding: 10px 0; overflow: hidden; position: relative; border-radius: 8px;"\x3E' +
-                        '\x3Cdiv style="font-size: 0.9rem; font-weight: bold; color: var(--primary); margin-bottom: 5px; text-align: center; z-index: 20;"\x3E' +
-                            '\x3Cspan class="material-symbols-outlined icon-sm" style="vertical-align: middle;"\x3Eschedule\x3C/span\x3E Planowe położenie pociągu (na szlaku)' +
-                        '\x3C/div\x3E' +
-                        '\x3Cdiv class="table-train-container"\x3E' +
-                            (typeof window.getTrainIndicatorHTML === 'function' ? window.getTrainIndicatorHTML(5) : '') +
-                        '\x3C/div\x3E' +
-                    '\x3C/div\x3E' +
-                '\x3C/td\x3E';
-            targetRow.parentNode.insertBefore(indicatorTr, targetRow);
-            if (!silent) window.centerOnElement(indicatorTr);
-        } else {
-            if (!silent) alert('Według wybranej daty i rozkładu pociąg nie znajduje się obecnie w trasie.');
-        }
-
-        if (!silent && btn) btn.innerHTML = '\x3Cspan class="material-symbols-outlined"\x3Eschedule\x3C/span\x3E';
-    }, silent ? 0 : 300);
-};
-
-// ==========================================
-// CZUWAK GPS – ŚLEDZENIE W CZASIE RZECZYWISTYM, KALISZ FIX v2 I WATCHDOG ZANIKU GPS
+// CZUWAK GPS – AUTOMATYCZNE ŚLEDZENIE, PRĘDKOŚCIOMIERZ, KALISZ FIX v2, TUNELE I AUTO-STOP PO ZMIANIE DK
 // ==========================================
 function getDistance(lat1, lon1, lat2, lon2) {
     const R = 6371;
@@ -2729,12 +2876,11 @@ function getDistance(lat1, lon1, lat2, lon2) {
 
 window._lastValidGpsTimestamp = 0;
 window._lastActiveSegmentState = null;
+window._smoothedSpeedKmH = null;
+window._wasInTunnelEstimation = false;
 
 window.locateTrainByGPS = async (silent = false) => {
-    if (!silent && window.activeTrackingMode === 'gps') {
-        window.stopTrainTracking();
-        return;
-    }
+    if (window._crewDutyCompleted) return;
 
     const rows = Array.from(document.querySelectorAll('.train-route-table tr:not(.train-moving-row):not(.station-standing-train-row):not(thead tr)'));
     if (rows.length === 0) return !silent && alert("Najpierw wyszukaj trasę pociągu!");
@@ -2742,6 +2888,7 @@ window.locateTrainByGPS = async (silent = false) => {
 
     window.activeTrackingMode = 'gps';
     window.requestWakeLock();
+    window.updateSpeedAndGpsIndicator(window._smoothedSpeedKmH, 'searching');
 
     // Odblokowanie Web Audio podczas gestu użytkownika
     try {
@@ -2765,11 +2912,6 @@ window.locateTrainByGPS = async (silent = false) => {
 
     const btn = document.getElementById('fabGpsBtn');
     const originalIcon = '\x3Cspan class="material-symbols-outlined"\x3Emy_location\x3C/span\x3E';
-    const timeBtn = document.getElementById('fabTimeBtn');
-    if (timeBtn) {
-        timeBtn.classList.remove('fab-active');
-        timeBtn.innerHTML = '\x3Cspan class="material-symbols-outlined"\x3Eschedule\x3C/span\x3E';
-    }
     if (btn) btn.classList.add('fab-active');
     if (!silent && btn) {
         btn.innerHTML = '\x3Cspan class="material-symbols-outlined spin"\x3Esync\x3C/span\x3E';
@@ -2806,11 +2948,15 @@ window.locateTrainByGPS = async (silent = false) => {
     if (!window._prevStationDistances) window._prevStationDistances = {};
 
     const processPosition = (position, isAccurate, shouldCenter = false) => {
-        window._lastValidGpsTimestamp = Date.now();
-        window.hideGpsSignalWarning();
+        if (window._crewDutyCompleted || window.activeTrackingMode !== 'gps') return;
 
         const userLat = position.coords.latitude;
         const userLng = position.coords.longitude;
+        const accuracyMeters = (position.coords && typeof position.coords.accuracy === 'number') ? position.coords.accuracy : (isAccurate ? 25 : 1200);
+        const isHighConfidenceGps = isAccurate && accuracyMeters <= 650;
+
+        window._lastValidGpsTimestamp = Date.now();
+        window.hideGpsSignalWarning();
 
         try {
             const currentRows = Array.from(document.querySelectorAll('.train-route-table tr:not(.train-moving-row):not(.station-standing-train-row):not(thead tr)'));
@@ -2874,12 +3020,12 @@ window.locateTrainByGPS = async (silent = false) => {
                 return;
             }
 
-            // Wyznaczenie wektora ruchu pociągu (heading lub różnica GPS) oraz prędkości km/h
+            // Wyznaczenie wektora ruchu pociągu (heading lub różnica GPS) oraz aktualnej prędkości km/h
             const cosLat = Math.cos(userLat * Math.PI / 180);
             const KM_PER_DEG = 111.32;
             let moveUx = null;
             let moveUy = null;
-            let speedKmH = 80; // Domyślna prędkość szlakowa na wypadek zaniku GPS
+            let measuredSpeedKmH = null;
 
             const rawHeading = position.coords && typeof position.coords.heading === 'number' && !isNaN(position.coords.heading)
                 ? position.coords.heading
@@ -2888,11 +3034,11 @@ window.locateTrainByGPS = async (silent = false) => {
                 ? position.coords.speed
                 : null;
 
-            if (rawSpeed !== null && rawSpeed > 2.0) {
-                speedKmH = Math.min(200, Math.max(20, rawSpeed * 3.6));
+            if (rawSpeed !== null && rawSpeed >= 0) {
+                measuredSpeedKmH = Math.min(220, Math.max(0, rawSpeed * 3.6));
             }
 
-            if (rawHeading !== null && rawHeading >= 0 && (rawSpeed === null || rawSpeed > 1.2)) {
+            if (rawHeading !== null && rawHeading >= 0 && (rawSpeed === null || rawSpeed > 1.0)) {
                 const headingRad = rawHeading * Math.PI / 180;
                 moveUx = Math.sin(headingRad);
                 moveUy = Math.cos(headingRad);
@@ -2901,24 +3047,40 @@ window.locateTrainByGPS = async (silent = false) => {
                 const dyKm = (userLat - window._lastTrainGpsFix.lat) * KM_PER_DEG;
                 const movedKm = Math.sqrt(dxKm * dxKm + dyKm * dyKm);
                 const dtHours = (Date.now() - window._lastTrainGpsFix.time) / 3600000;
-                if (movedKm >= 0.12) {
+                if (movedKm >= 0.06) {
                     moveUx = dxKm / movedKm;
                     moveUy = dyKm / movedKm;
-                    if (dtHours > 0.0005) {
+                    if (measuredSpeedKmH === null && dtHours > 0.0003) {
                         const calcSpd = movedKm / dtHours;
-                        if (calcSpd >= 15 && calcSpd <= 220) speedKmH = calcSpd;
+                        if (calcSpd >= 5 && calcSpd <= 220) measuredSpeedKmH = calcSpd;
                     }
+                } else if (measuredSpeedKmH === null && dtHours > 0.002 && movedKm < 0.03) {
+                    measuredSpeedKmH = 0;
                 }
             }
 
-            if (!window._lastTrainGpsFix || getDistance(userLat, userLng, window._lastTrainGpsFix.lat, window._lastTrainGpsFix.lng) >= 0.12) {
-                window._lastTrainGpsFix = { lat: userLat, lng: userLng, time: Date.now(), speedKmH: speedKmH };
+            if (measuredSpeedKmH !== null) {
+                if (window._smoothedSpeedKmH === null || measuredSpeedKmH < 4) {
+                    window._smoothedSpeedKmH = measuredSpeedKmH;
+                } else {
+                    window._smoothedSpeedKmH = 0.65 * measuredSpeedKmH + 0.35 * window._smoothedSpeedKmH;
+                }
             }
 
-            const color = isAccurate ? 'var(--success)' : 'var(--warning)';
-            const bgColor = isAccurate ? 'rgba(22, 163, 74, 0.1)' : 'rgba(245, 158, 11, 0.1)';
-            const accuracyText = !isAccurate
-                ? '\x3Cspan style="font-size: 0.7rem; font-weight: normal; opacity: 0.8; margin-top: 4px; display: block; text-align: center;"\x3E(Lokalizacja przybliżona - sieć komórkowa/Wi-Fi)\x3C/span\x3E'
+            const displaySpeedKmH = (minDistance <= 0.65 && (measuredSpeedKmH === null || measuredSpeedKmH < 8))
+                ? 0
+                : (window._smoothedSpeedKmH !== null ? window._smoothedSpeedKmH : 0);
+
+            window.updateSpeedAndGpsIndicator(displaySpeedKmH, isHighConfidenceGps ? 'ok' : 'bts');
+
+            if (!window._lastTrainGpsFix || getDistance(userLat, userLng, window._lastTrainGpsFix.lat, window._lastTrainGpsFix.lng) >= 0.06) {
+                window._lastTrainGpsFix = { lat: userLat, lng: userLng, time: Date.now(), speedKmH: displaySpeedKmH };
+            }
+
+            const color = isHighConfidenceGps ? 'var(--success)' : 'var(--warning)';
+            const bgColor = isHighConfidenceGps ? 'rgba(22, 163, 74, 0.1)' : 'rgba(245, 158, 11, 0.1)';
+            const accuracyText = !isHighConfidenceGps
+                ? '\x3Cspan style="font-size: 0.7rem; font-weight: normal; opacity: 0.8; margin-top: 4px; display: block; text-align: center;"\x3E(Lokalizacja przybliżona - BTS/Sieć)\x3C/span\x3E'
                 : '';
 
             rowDistances.forEach(rd => {
@@ -2948,7 +3110,7 @@ window.locateTrainByGPS = async (silent = false) => {
                     distDiv.className = 'gps-distance-indicator' + (isClosest ? ' closest' : '');
                     distDiv.style.color = distColor;
 
-                    const extraText = (isClosest && !isAccurate) ? accuracyText : '';
+                    const extraText = (isClosest && !isHighConfidenceGps) ? accuracyText : '';
                     distDiv.innerHTML =
                         '\x3Cspan class="gps-dist-pill" style="background: ' + distBg + '; border: ' + distBorder + '; font-weight: ' + (isClosest ? '800' : '600') + ';"\x3E' +
                             '\x3Cspan class="material-symbols-outlined icon-sm" style="font-size: 0.95rem;"\x3Enear_me\x3C/span\x3E ~' + rd.distance.toFixed(1) + ' km' +
@@ -2961,6 +3123,7 @@ window.locateTrainByGPS = async (silent = false) => {
                 for (let pIdx = 0; pIdx <= closestMatchedPos; pIdx++) {
                     window._passedStationIndices.add(pIdx);
                 }
+                window._wasInTunnelEstimation = false;
                 window.dismissStationApproachToast();
                 window._lastActiveSegmentState = null;
 
@@ -2984,10 +3147,10 @@ window.locateTrainByGPS = async (silent = false) => {
                 if (isStandingAlreadyHere) {
                     const badge = existingStandingTr.querySelector('.station-standing-badge');
                     if (badge) {
-                        badge.className = 'station-standing-badge ' + (isAccurate ? 'gps-active' : 'gps-approx');
+                        badge.className = 'station-standing-badge ' + (isHighConfidenceGps ? 'gps-active' : 'gps-approx');
                         badge.innerHTML =
                             '\x3Cspan class="material-symbols-outlined icon-sm" style="animation: train-pulse 1.5s infinite;"\x3Emy_location\x3C/span\x3E ' +
-                            (isAccurate ? 'Twoja lokalizacja (GPS Satelity): ' : 'Lokalizacja przybliżona: ') +
+                            (isHighConfidenceGps ? 'Twoja lokalizacja (GPS Satelity): ' : 'Lokalizacja przybliżona (BTS): ') +
                             'Pociąg w obrębie stacji ' + escapeHTML(stationName) + ' (~' + minDistance.toFixed(1) + ' km)';
                     }
                 } else {
@@ -2998,9 +3161,9 @@ window.locateTrainByGPS = async (silent = false) => {
                     standingTr.innerHTML =
                         '\x3Ctd colspan="3" style="padding: 0; border: none; background: transparent;"\x3E' +
                             '\x3Cdiv class="station-standing-box"\x3E' +
-                                '\x3Cdiv class="station-standing-badge ' + (isAccurate ? 'gps-active' : 'gps-approx') + '"\x3E' +
+                                '\x3Cdiv class="station-standing-badge ' + (isHighConfidenceGps ? 'gps-active' : 'gps-approx') + '"\x3E' +
                                     '\x3Cspan class="material-symbols-outlined icon-sm" style="animation: train-pulse 1.5s infinite;"\x3Emy_location\x3C/span\x3E ' +
-                                    (isAccurate ? 'Twoja lokalizacja (GPS Satelity): ' : 'Lokalizacja przybliżona: ') +
+                                    (isHighConfidenceGps ? 'Twoja lokalizacja (GPS Satelity): ' : 'Lokalizacja przybliżona (BTS): ') +
                                     'Pociąg w obrębie stacji ' + escapeHTML(stationName) + ' (~' + minDistance.toFixed(1) + ' km)' +
                                 '\x3C/div\x3E' +
                                 '\x3Cdiv class="table-train-container standing-station-container"\x3E' +
@@ -3020,8 +3183,14 @@ window.locateTrainByGPS = async (silent = false) => {
                 if (shouldCenter) {
                     window.centerOnElement(closestRow);
                 }
+
+                // SAMOCZYNNE WYŁĄCZENIE CZUWAKA PO WJAZDZIE NA STACJĘ ZMIANY DK!
+                if (typeof window._crewDutyEndIdx === 'number' && closestRowIndex >= window._crewDutyEndIdx && closestRowIndex > window._crewDutyStartIdx) {
+                    window.completeCrewDutyAndStopCzuwak(stationName, 'Wjazd na stację zmiany DK');
+                    return;
+                }
             } else if (rowDistances.length >= 2) {
-                // TRYB SZLAK: Pociąg jedzie pomiędzy stacjami (wzmocniony algorytm Kalisz Fix v2)
+                // TRYB SZLAK: Pociąg jedzie pomiędzy stacjami (Kalisz Fix v2 + Filtr Post-Tunelowy)
                 document.querySelectorAll('.station-standing-train-row').forEach(el => el.remove());
                 document.querySelectorAll('.train-route-table tr.active-station-row').forEach(el => {
                     el.classList.remove('active-station-row', 'station-with-train');
@@ -3060,7 +3229,7 @@ window.locateTrainByGPS = async (silent = false) => {
                     const dEllipse = Math.max(0, A.distance + B.distance - dAB);
                     const dLongOut = t < 0 ? (-t * L) : (t > 1 ? ((t - 1) * L) : 0);
 
-                    // --- KALISZ FIX v2: OCHRONA PRZED PRZERZUCANIEM POCIĄGU ZA STACJĘ NA ŁUKACH (DO 15 KM) ---
+                    // --- KALISZ FIX v2 + OCHRONA PO WYJEŹDZIE Z TUNELU ---
                     let headingPenalty = 0;
                     const prevDistA = window._prevStationDistances[A.name];
                     const prevDistB = window._prevStationDistances[B.name];
@@ -3071,22 +3240,17 @@ window.locateTrainByGPS = async (silent = false) => {
                         const distB = Math.sqrt(Bx * Bx + By * By);
                         const distA = Math.sqrt(Ax * Ax + Ay * Ay);
                         if (distB > 0.05) {
-                            // cosToB > 0 oznacza, że pociąg jedzie w stronę stacji B
                             const cosToB = (moveUx * Bx + moveUy * By) / distB;
-                            // cosToA > 0 oznacza, że pociąg jedzie w stronę stacji A (czyli jest jeszcze PRZED stacją A!)
                             const cosToA = distA > 0.05 ? ((moveUx * Ax + moveUy * Ay) / distA) : 0;
 
                             if (B.distance < 15.0 && cosToB > 0.2) {
                                 headingPenalty -= 4.5 * cosToB;
                             }
                             if (A.distance < 15.0 && cosToA > 0.2) {
-                                // Pociąg wciąż zbliża się do stacji A (np. Kalisz na łuku) -> nie mógł jeszcze z niej odjechać!
                                 headingPenalty += 28.0 * cosToA;
                             }
                         }
                     } else {
-                        // Gdy brak wektora GPS (np. pierwszy odczyt na łuku przed Kaliszem):
-                        // 1) Sprawdź czy stacja A nie została jeszcze zaliczona i czy wg rozkładu jeszcze nie odjechaliśmy z A
                         if (A.distance < 12.0 && k === closestMatchedPos && !window._passedStationIndices.has(k)) {
                             if (A.absDep !== null && relMinutesNow < A.absDep) {
                                 headingPenalty += 12.0;
@@ -3096,7 +3260,6 @@ window.locateTrainByGPS = async (silent = false) => {
                         }
                     }
 
-                    // 2) Pochodna odległości (malejący dystans do A = zbliżamy się do A, nie odjechaliśmy z A)
                     if (A.distance < 15.0 && deltaDistA < -0.04) {
                         headingPenalty += 22.0;
                     }
@@ -3104,11 +3267,20 @@ window.locateTrainByGPS = async (silent = false) => {
                         headingPenalty -= 3.5;
                     }
 
+                    // Filtr post-tunelowy: jeśli stacja B została już wcześniej zaliczona (np. w tunelu lub na postoju), nie cofaj pociągu przed B przy niedokładnym BTS
+                    if (!isHighConfidenceGps && window._passedStationIndices.has(k + 1)) {
+                        headingPenalty += 45.0;
+                    }
+
                     const score = dPerp + 0.75 * dEllipse + 1.25 * dLongOut + headingPenalty;
                     if (score < bestScore) {
                         bestScore = score;
                         bestSegIdx = k;
                     }
+                }
+
+                if (isHighConfidenceGps) {
+                    window._wasInTunnelEstimation = false;
                 }
 
                 // Zapisz bieżące odległości do stacji dla kolejnego kroku pomiarowego
@@ -3121,17 +3293,48 @@ window.locateTrainByGPS = async (silent = false) => {
 
                 const segStart = rowDistances[bestSegIdx];
                 const segEnd = rowDistances[bestSegIdx + 1];
+
+                // Zabezpieczenie 1: Jeśli pociąg minął już stację zmiany DK (znajduje się na odcinku za stacją zmiany DK) -> wyłącz Czuwaka!
+                if (typeof window._crewDutyEndIdx === 'number' && segStart.index >= window._crewDutyEndIdx && window._passedStationIndices.size > 0) {
+                    window.completeCrewDutyAndStopCzuwak(window._crewDutyEndStationName || segStart.name, 'Pociąg minął stację zmiany DK');
+                    return;
+                }
+
+                // Zabezpieczenie 2: Jeśli użytkownik oddalił się od trasy pociągu na ponad 18 km (np. wysiadł i pojechał do domu) przy dokładnym GPS -> wyłącz Czuwaka!
+                if (isHighConfidenceGps && bestScore > 18.0 && minDistance > 18.0 && window._passedStationIndices.size > 0) {
+                    window.completeCrewDutyAndStopCzuwak(window._crewDutyEndStationName || segStart.name, 'Oddalono się od trasy pociągu (>18 km)');
+                    return;
+                }
+
                 const insertBeforeIndex = segEnd.index;
                 const targetRow = rowDistances.find(r => r.index === insertBeforeIndex)?.row || currentRows[closestRowIndex];
 
-                // Zapisz stan aktywnego odcinka dla Watchdoga utraty sygnału GPS (Dead Reckoning)
+                // Wylicz prędkość rozkładową dla tego odcinka szlaku (do estymacji w tunelu bez GPS i BTS)
+                const dAB = Math.max(1.0, getDistance(segStart.lat, segStart.lng, segEnd.lat, segEnd.lng));
+                const segMinutes = (segEnd.absArr !== null && segStart.absDep !== null && segEnd.absArr > segStart.absDep)
+                    ? (segEnd.absArr - segStart.absDep)
+                    : ((dAB / 85) * 60);
+                const scheduledSegSpeedKmH = Math.min(160, Math.max(40, dAB / Math.max(0.05, segMinutes / 60)));
+                const effectiveSpeedForTunnel = (window._smoothedSpeedKmH && window._smoothedSpeedKmH >= 20)
+                    ? window._smoothedSpeedKmH
+                    : scheduledSegSpeedKmH;
+
+                if (window._smoothedSpeedKmH === null || window._smoothedSpeedKmH < 5) {
+                    window.updateSpeedAndGpsIndicator(scheduledSegSpeedKmH, isHighConfidenceGps ? 'ok' : 'bts');
+                }
+
+                // Zapisz pełny stan aktywnego odcinka dla silnika tunelowego (Dead Reckoning v2)
                 window._lastActiveSegmentState = {
+                    segIdx: bestSegIdx,
                     segStart: segStart,
                     segEnd: segEnd,
+                    dAB: dAB,
                     remainingKm: segEnd.distance,
                     originKm: segStart.distance,
-                    speedKmH: speedKmH,
-                    timestamp: Date.now()
+                    speedKmH: effectiveSpeedForTunnel,
+                    scheduledSpeedKmH: scheduledSegSpeedKmH,
+                    timestamp: Date.now(),
+                    rowDistancesSnapshot: rowDistances
                 };
 
                 // Aktualizuj pozycję na mapie OpenRailwayMap
@@ -3139,11 +3342,12 @@ window.locateTrainByGPS = async (silent = false) => {
                     window.updateOrmLiveTrainPosition(userLat, userLng, segEnd);
                 }
 
-                // --- POWIADOMIENIE Z DŹWIĘKIEM NA WYBRANĄ LICZBĘ KM PRZED STACJĄ DOCELOWĄ ---
+                // --- POWIADOMIENIE Z DŹWIĘKIEM NA WYBRANĄ LICZBĘ KM PRZED STACJĄ DOCELOWĄ (TYLKO W ODCINKU OBSŁUGI DK!) ---
+                const isWithinCrewDuty = (segEnd.index > window._crewDutyStartIdx && segEnd.index <= window._crewDutyEndIdx);
                 const configuredAlertKm = window.getAlertDistanceKm();
-                const distBetweenStations = getDistance(segStart.lat, segStart.lng, segEnd.lat, segEnd.lng);
-                const approachThresholdKm = Math.min(configuredAlertKm, distBetweenStations * 0.65);
-                if (segEnd.distance <= approachThresholdKm && segEnd.distance > 0.85) {
+                const approachThresholdKm = Math.min(configuredAlertKm, dAB * 0.65);
+
+                if (isWithinCrewDuty && segEnd.distance <= approachThresholdKm && segEnd.distance > 0.85) {
                     window.triggerStationApproachAlert(segEnd.name, segEnd.distance, false, false);
                 } else if (segEnd.distance <= 0.85) {
                     window.dismissStationApproachToast();
@@ -3156,7 +3360,7 @@ window.locateTrainByGPS = async (silent = false) => {
                             '\x3Cspan class="train-segment-pill-text"\x3E' +
                                 '\x3Cspan class="nowrap-token"\x3EOdjechano z:\x3C/span\x3E ' +
                                 '\x3Cstrong style="color:var(--text);"\x3E' + escapeHTML(segStart.name) + '\x3C/strong\x3E ' +
-                                '\x3Cspan class="nowrap-token"\x3E(~' + segStart.distance.toFixed(1) + ' km temu)\x3C/span\x3E' +
+                                '\x3Cspan class="nowrap-token" id="liveOriginKmSpan"\x3E(~' + segStart.distance.toFixed(1) + ' km temu)\x3C/span\x3E' +
                             '\x3C/span\x3E' +
                         '\x3C/div\x3E' +
                         '\x3Cdiv class="train-segment-pill destination"\x3E' +
@@ -3181,7 +3385,7 @@ window.locateTrainByGPS = async (silent = false) => {
                         headerEl.style.color = color;
                         headerEl.innerHTML =
                             '\x3Cspan class="material-symbols-outlined icon-sm" style="animation: train-pulse 1.5s infinite;"\x3Emy_location\x3C/span\x3E ' +
-                            (isAccurate ? 'Czuwak aktywny (GPS Satelity)' : 'Czuwak aktywny (Przybliżona sieć)');
+                            (isHighConfidenceGps ? 'Czuwak aktywny (GPS Satelity)' : 'Czuwak aktywny (Sieć BTS / Hybryda)');
                     }
                     const subTitleEl = existingMovingTr.querySelector('.segment-sub-title');
                     if (subTitleEl) subTitleEl.innerHTML = segmentLabel;
@@ -3198,7 +3402,7 @@ window.locateTrainByGPS = async (silent = false) => {
                             '\x3Cdiv style="background: ' + bgColor + '; display: flex; flex-direction: column; padding: 10px 0; overflow: hidden; position: relative; border-radius: 8px;"\x3E' +
                                 '\x3Cdiv class="moving-loc-header" style="font-size: 0.9rem; font-weight: bold; color: ' + color + '; margin-bottom: 2px; text-align: center; z-index: 20; display: flex; align-items: center; justify-content: center; gap: 6px;"\x3E' +
                                     '\x3Cspan class="material-symbols-outlined icon-sm" style="animation: train-pulse 1.5s infinite;"\x3Emy_location\x3C/span\x3E ' +
-                                    (isAccurate ? 'Czuwak aktywny (GPS Satelity)' : 'Czuwak aktywny (Przybliżona sieć)') +
+                                    (isHighConfidenceGps ? 'Czuwak aktywny (GPS Satelity)' : 'Czuwak aktywny (Sieć BTS / Hybryda)') +
                                 '\x3C/div\x3E' +
                                 segmentSubHtml +
                                 '\x3Cdiv class="train-segment-distances-wrapper"\x3E' +
@@ -3225,14 +3429,14 @@ window.locateTrainByGPS = async (silent = false) => {
     };
 
     // 1. Natychmiastowy odczyt GPS
-    let hasCentered = silent;
+    let hasCentered = false;
     navigator.geolocation.getCurrentPosition(
         (pos) => {
             processPosition(pos, true, !hasCentered);
             hasCentered = true;
             if (!silent && btn) btn.innerHTML = originalIcon;
         },
-        (error1) => {
+        () => {
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
                     processPosition(pos, false, !hasCentered);
@@ -3240,13 +3444,13 @@ window.locateTrainByGPS = async (silent = false) => {
                     if (!silent && btn) btn.innerHTML = originalIcon;
                 },
                 () => {
-                    window.showGpsSignalWarning('\x3Cstrong\x3EBrak sygnału GPS i sieci:\x3C/strong\x3E Podejdź bliżej okna wagonu. Czuwak próbuje nawiązać namiar w tle...');
+                    window.showGpsSignalWarning('\x3Cstrong\x3EBrak sygnału GPS i BTS (np. tunel):\x3C/strong\x3E Czuwak oczekuje na sygnał i monitoruje trasę w tle...');
                     if (!silent && btn) btn.innerHTML = originalIcon;
                 },
-                { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
+                { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
             );
         },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
     );
 
     // 2. Ciągłe śledzenie przez watchPosition
@@ -3257,72 +3461,136 @@ window.locateTrainByGPS = async (silent = false) => {
     try {
         window._trainGpsWatchId = navigator.geolocation.watchPosition(
             (pos) => {
-                if (window.activeTrackingMode === 'gps' && document.querySelector('.train-route-table')) {
+                if (window.activeTrackingMode === 'gps' && !window._crewDutyCompleted && document.querySelector('.train-route-table')) {
                     processPosition(pos, true, false);
                 }
             },
             (err) => console.warn("WatchPosition ostrzeżenie:", err),
-            { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 }
+            { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
         );
     } catch (e) {}
 
-    // 3. Interwał sondujący co 8s
+    // 3. Interwał sondujący co 6s (szybki powrót po wyjeździe z tunelu)
     if (window._trainGpsPollInterval) clearInterval(window._trainGpsPollInterval);
     window._trainGpsPollInterval = setInterval(() => {
-        if (window.activeTrackingMode === 'gps' && document.querySelector('.train-route-table')) {
+        if (window.activeTrackingMode === 'gps' && !window._crewDutyCompleted && document.querySelector('.train-route-table')) {
             navigator.geolocation.getCurrentPosition(
                 (pos) => processPosition(pos, true, false),
                 () => {
                     navigator.geolocation.getCurrentPosition(
                         (posLow) => processPosition(posLow, false, false),
                         null,
-                        { enableHighAccuracy: false, timeout: 5000, maximumAge: 5000 }
+                        { enableHighAccuracy: false, timeout: 4000, maximumAge: 3000 }
                     );
                 },
-                { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
+                { enableHighAccuracy: true, timeout: 4500, maximumAge: 0 }
             );
         } else {
             clearInterval(window._trainGpsPollInterval);
             window._trainGpsPollInterval = null;
         }
-    }, 8000);
+    }, 6000);
 
-    // 4. WATCHDOG UTRATY SYGNAŁU GPS (DEAD RECKONING FALLBACK W TUNELU / BEZ ZASIĘGU)
+    // 4. SILNIK TUNELOWY (DEAD RECKONING v2 PRZY UTRACIE GPS ORAZ BTS + AUTO-WYŁĄCZENIE PO SŁUŻBIE)
     if (window._gpsWatchdogInterval) clearInterval(window._gpsWatchdogInterval);
     window._gpsWatchdogInterval = setInterval(() => {
-        if (window.activeTrackingMode !== 'gps' || !document.querySelector('.train-route-table')) {
+        if (window.activeTrackingMode !== 'gps' || window._crewDutyCompleted || !document.querySelector('.train-route-table')) {
             clearInterval(window._gpsWatchdogInterval);
             window._gpsWatchdogInterval = null;
             return;
         }
+
+        // Sprawdzenie, czy nie minęło >45 minut od planowego przyjazdu do stacji zmiany DK (gdy pracownik wysiadł i zapomniał wyłączyć)
+        const nowD = new Date();
+        let relMinutesNow = nowD.getHours() * 60 + nowD.getMinutes();
+        if (window._currentTrainBestMatch && typeof window._currentTrainBestMatch.daysAgo === 'number') {
+            relMinutesNow += window._currentTrainBestMatch.daysAgo * 1440;
+        }
+        const dutyEndRow = document.querySelector('.train-route-table tr[data-station-idx="' + window._crewDutyEndIdx + '"]');
+        if (dutyEndRow && dutyEndRow.dataset.absArr !== undefined) {
+            const endArrMin = parseInt(dutyEndRow.dataset.absArr, 10);
+            if (!isNaN(endArrMin) && relMinutesNow > (endArrMin + 45)) {
+                window.completeCrewDutyAndStopCzuwak(window._crewDutyEndStationName, 'Upłynęło 45 min po planowym przyjeździe do stacji zmiany DK');
+                return;
+            }
+        }
+
         if (!window._lastValidGpsTimestamp) return;
         const secSinceLastFix = Math.round((Date.now() - window._lastValidGpsTimestamp) / 1000);
-        if (secSinceLastFix >= 20 && window._lastActiveSegmentState) {
+
+        if (secSinceLastFix >= 12 && window._lastActiveSegmentState) {
+            window._wasInTunnelEstimation = true;
             const st = window._lastActiveSegmentState;
+            const tunnelSpeedKmH = Math.round(0.6 * (st.speedKmH || 80) + 0.4 * (st.scheduledSpeedKmH || 80));
             const elapsedHours = (Date.now() - st.timestamp) / 3600000;
-            const traveledEstKm = elapsedHours * (st.speedKmH || 80);
-            const estRemainingKm = Math.max(0.5, st.remainingKm - traveledEstKm);
+            const traveledEstKm = elapsedHours * tunnelSpeedKmH;
+            let estRemainingKm = Math.max(0.3, st.remainingKm - traveledEstKm);
+            let estOriginKm = st.originKm + traveledEstKm;
 
-            window.showGpsSignalWarning(
-                '\x3Cstrong\x3EUtrata sygnału GPS (' + secSinceLastFix + ' s):\x3C/strong\x3E ' +
-                'Szacowany dystans do stacji \x3Cstrong\x3E' + escapeHTML(st.segEnd.name) + '\x3C/strong\x3E: ok. \x3Cstrong\x3E' + estRemainingKm.toFixed(1) + ' km\x3C/strong\x3E (wg ostatniej prędkości ' + Math.round(st.speedKmH || 80) + ' km/h).'
-            );
+            // Aktualizacja kółka prędkościomierza i statusu na TUNEL
+            window.updateSpeedAndGpsIndicator(tunnelSpeedKmH, 'tunnel');
 
-            const liveSpan = document.getElementById('liveDestKmSpan');
-            if (liveSpan) {
-                liveSpan.innerText = '(szacowane ~' + estRemainingKm.toFixed(1) + ' km)';
+            // Jeśli z wyliczenia w długim tunelu pociąg dojechał do stacji zmiany DK -> odhacz i wyłącz Czuwak
+            if (estRemainingKm <= 0.55 && st.segEnd.index === window._crewDutyEndIdx) {
+                window.completeCrewDutyAndStopCzuwak(st.segEnd.name, 'Osiągnięto stację zmiany DK (estymacja)');
+                return;
             }
 
+            // Jeśli w długim tunelu pociąg minął stację pośrednią -> przepnij estymację na kolejny odcinek szlaku!
+            if (estRemainingKm <= 0.4 && Array.isArray(st.rowDistancesSnapshot) && (st.segIdx + 2) < st.rowDistancesSnapshot.length) {
+                window._passedStationIndices.add(st.segIdx + 1);
+                const nextA = st.rowDistancesSnapshot[st.segIdx + 1];
+                const nextB = st.rowDistancesSnapshot[st.segIdx + 2];
+                const nextDAB = Math.max(1.0, getDistance(nextA.lat, nextA.lng, nextB.lat, nextB.lng));
+                window._lastActiveSegmentState = {
+                    segIdx: st.segIdx + 1,
+                    segStart: nextA,
+                    segEnd: nextB,
+                    dAB: nextDAB,
+                    remainingKm: nextDAB,
+                    originKm: 0,
+                    speedKmH: tunnelSpeedKmH,
+                    scheduledSpeedKmH: st.scheduledSpeedKmH,
+                    timestamp: Date.now(),
+                    rowDistancesSnapshot: st.rowDistancesSnapshot
+                };
+                return;
+            }
+
+            window.showGpsSignalWarning(
+                '\x3Cstrong\x3EBrak zasięgu GPS i BTS (' + secSinceLastFix + ' s – np. tunel):\x3C/strong\x3E ' +
+                'Nawigacja inercyjna aktywna (~' + tunnelSpeedKmH + ' km/h). Do stacji \x3Cstrong\x3E' + escapeHTML(st.segEnd.name) + '\x3C/strong\x3E pozostało ok. \x3Cstrong\x3E' + estRemainingKm.toFixed(1) + ' km\x3C/strong\x3E.'
+            );
+
+            const liveDestSpan = document.getElementById('liveDestKmSpan');
+            if (liveDestSpan) {
+                liveDestSpan.innerText = '(pozostało ~' + estRemainingKm.toFixed(1) + ' km [tunel])';
+            }
+            const liveOrigSpan = document.getElementById('liveOriginKmSpan');
+            if (liveOrigSpan) {
+                liveOrigSpan.innerText = '(~' + estOriginKm.toFixed(1) + ' km temu)';
+            }
+
+            // Interpolacja pozycji pociągu na mapie OpenRailwayMap podczas jazdy w tunelu
+            if (typeof window.updateOrmLiveTrainPosition === 'function' && st.dAB > 0.2) {
+                const progressFrac = Math.min(0.98, Math.max(0.02, 1 - (estRemainingKm / st.dAB)));
+                const estLat = st.segStart.lat + (st.segEnd.lat - st.segStart.lat) * progressFrac;
+                const estLng = st.segStart.lng + (st.segEnd.lng - st.segStart.lng) * progressFrac;
+                window.updateOrmLiveTrainPosition(estLat, estLng, st.segEnd);
+            }
+
+            const isWithinCrewDuty = (st.segEnd.index > window._crewDutyStartIdx && st.segEnd.index <= window._crewDutyEndIdx);
             const configuredAlertKm = window.getAlertDistanceKm();
-            if (estRemainingKm <= configuredAlertKm && estRemainingKm > 0.85) {
+            const approachThresholdKm = Math.min(configuredAlertKm, st.dAB * 0.65);
+            if (isWithinCrewDuty && estRemainingKm <= approachThresholdKm && estRemainingKm > 0.6) {
                 window.triggerStationApproachAlert(st.segEnd.name, estRemainingKm, false, true);
             }
         }
-    }, 5000);
+    }, 3000);
 };
 
 document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && window.activeTrackingMode === 'gps' && document.querySelector('.train-route-table')) {
+    if (document.visibilityState === 'visible' && !window._crewDutyCompleted && document.querySelector('.train-route-table')) {
         window.locateTrainByGPS(true);
     }
 });
@@ -3343,15 +3611,6 @@ function bootApplication() {
     window.pobierzDane('all', forceDbUpdate)
         .then(() => window.checkDbVersion())
         .catch(err => console.error("Błąd inicjalizacji danych na starcie:", err));
-
-    if (window._trainRefreshInterval) clearInterval(window._trainRefreshInterval);
-    window._trainRefreshInterval = setInterval(() => {
-        if (document.getElementById('mainStatusBox')?.style.display === 'block' && currentMode === 'train') {
-            if (window.activeTrackingMode === 'time') {
-                window.locateTrainByTime(true);
-            }
-        }
-    }, 60000);
 }
 
 if ('serviceWorker' in navigator) {
