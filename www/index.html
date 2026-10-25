@@ -28,16 +28,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#0f172a">
     <title>Czuwak – Asystent Drużyn Konduktorskich</title>
-    <meta name="description" content="System powiadamiania drużyn konduktorskich (DK) o zbliżaniu się do stacji na trasie pociągu (6 km przed wjazdem)." />
+    <meta name="description" content="System powiadamiania drużyn konduktorskich (DK) o zbliżaniu się do stacji na trasie pociągu." />
     <link rel="manifest" href="manifest.json">
-    <link rel="icon" type="image/svg+xml" href="favicon-ic.svg">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="icon" type="image/png" href="apple-touch-icon.png">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
     <link rel="stylesheet" href="css/index.css">
     
-    <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+    <script src="vendor/localforage.min.js"></script>
+    <script src="vendor/leaflet/leaflet.js"></script>
 </head>
 <body>
     <!-- Global Progress Bar -->
@@ -49,6 +51,56 @@
             0% { transform: translateX(-100%); width: 30%; }
             50% { width: 50%; }
             100% { transform: translateX(400%); width: 30%; }
+        }
+        .date-quick-btn {
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--input-border);
+            background: var(--input-bg);
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-height: 38px;
+            flex: 1;
+        }
+        .date-quick-btn.active {
+            background: var(--primary);
+            color: #ffffff;
+            border-color: var(--primary);
+        }
+        .preset-km-btn {
+            padding: 5px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--glass-border);
+            background: var(--input-bg);
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            flex: 1;
+            text-align: center;
+        }
+        .preset-km-btn.active {
+            background: rgba(2, 132, 199, 0.22);
+            color: var(--primary);
+            border-color: var(--primary);
+        }
+        .orm-map-wrapper {
+            margin-top: 12px;
+            margin-bottom: 14px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1.5px solid var(--glass-border);
+            background: var(--input-bg);
+            box-shadow: var(--shadow);
+        }
+        #openRailwayMapContainer {
+            width: 100%;
+            height: 360px;
+            background: #0f172a;
+            z-index: 10;
         }
     </style>
          
@@ -74,17 +126,64 @@
                     <li><span class="stat-label">Waż. poc.:</span> <span id="stat_trains_expires" class="stat-val">Brak</span></li>
                     <li><span class="stat-label">Stacje z GPS:</span> <span id="stat_stations" class="stat-val">0</span></li>
                     <li><span class="stat-label">Ilość pociągów:</span> <span id="stat_trains" class="stat-val">0</span></li>
+                    <li><span class="stat-label">Mapa ORM Offline:</span> <span id="stat_orm_tiles" class="stat-val">0 kafelków</span></li>
                     <li><span class="stat-label">Pamięć Cache:</span> <span id="stat_storage" class="stat-val">0 KB</span></li>
                 </ul>
             </div>
                          
             <div class="menu-section">
-                <h3><span class="material-symbols-outlined">settings</span> Opcje Czuwaka</h3>
-                
+                <h3><span class="material-symbols-outlined">tune</span> Konfiguracja Alarmu Czuwaka</h3>
+
+                <!-- SUWAK DYSTANSU ALARMU (1.0 - 15.0 KM) -->
+                <div style="background: var(--input-bg); border: 1px solid var(--glass-border); border-radius: 10px; padding: 12px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-size: 0.86rem; font-weight: 700; color: var(--text);">Wyprzedzenie przed stacją:</span>
+                        <span id="alertDistanceValueLabel" style="font-size: 1.05rem; font-weight: 900; color: var(--primary); background: rgba(2, 132, 199, 0.15); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--primary);">6.0 km</span>
+                    </div>
+                    <input type="range" id="alertDistanceSlider" min="1" max="15" step="0.5" value="6" oninput="window.onAlertDistanceChange(this.value)" style="width: 100%; accent-color: var(--primary); cursor: pointer; margin-bottom: 8px;">
+                    <div style="display: flex; gap: 6px;">
+                        <button type="button" class="preset-km-btn" data-km="3" onclick="window.onAlertDistanceChange(this.dataset.km)">3 km</button>
+                        <button type="button" class="preset-km-btn" data-km="5" onclick="window.onAlertDistanceChange(this.dataset.km)">5 km</button>
+                        <button type="button" class="preset-km-btn active" data-km="6" onclick="window.onAlertDistanceChange(this.dataset.km)">6 km</button>
+                        <button type="button" class="preset-km-btn" data-km="8" onclick="window.onAlertDistanceChange(this.dataset.km)">8 km</button>
+                        <button type="button" class="preset-km-btn" data-km="10" onclick="window.onAlertDistanceChange(this.dataset.km)">10 km</button>
+                    </div>
+                </div>
+
+                <!-- WYBÓR RODZAJU POWIADOMIENIA: JEDNOKROTNE VS BUDZIK -->
                 <div class="menu-btn-group">
-                    <div class="menu-btn-group-label">Synchronizacja baz danych</div>
+                    <div class="menu-btn-group-label">Rodzaj powiadomienia dźwiękowego</div>
+                    <button id="btnAlertModeOnce" class="menu-btn menu-btn-secondary" onclick="window.setAlertMode('once')">
+                        <span class="material-symbols-outlined" id="iconAlertModeOnce" style="color:var(--primary);">notifications</span>
+                        <div style="text-align: left; line-height: 1.25;">
+                            <div style="font-weight: 800;">Jednokrotne przypomnienie</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">Podwójny gong i wibracja raz po przekroczeniu progu km</div>
+                        </div>
+                    </button>
+                    <button id="btnAlertModeAlarm" class="menu-btn menu-btn-secondary" onclick="window.setAlertMode('alarm')">
+                        <span class="material-symbols-outlined" id="iconAlertModeAlarm" style="color:var(--warning);">alarm</span>
+                        <div style="text-align: left; line-height: 1.25;">
+                            <div style="font-weight: 800;">Tryb Budzika (do potwierdzenia)</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">Dźwięk i wibracja w pętli aż do kliknięcia „Potwierdź”</div>
+                        </div>
+                    </button>
+                </div>
+
+                <div class="menu-btn-group">
+                    <div class="menu-btn-group-label">Włącznik i test dźwięku</div>
+                    <button id="btnToggleStationAlerts" class="menu-btn menu-btn-secondary" onclick="window.toggleStationApproachAlerts()">
+                        <span class="material-symbols-outlined" id="stationAlertsIcon" style="color:var(--open);">notifications_active</span> 
+                        <span id="stationAlertsLabel">Alarm stacyjny (6.0 km): WŁĄCZONY</span>
+                    </button>
+                    <button class="menu-btn menu-btn-secondary" onclick="window.testStationAlert()">
+                        <span class="material-symbols-outlined" style="color:var(--primary);">volume_up</span> Przetestuj wybrany alarm i komunikat
+                    </button>
+                </div>
+
+                <div class="menu-btn-group">
+                    <div class="menu-btn-group-label">Synchronizacja baz danych i mapy</div>
                     <button id="btnRefreshAll" class="menu-btn menu-btn-primary" onclick="window.pobierzDane('all', true)">
-                        <span class="material-symbols-outlined">cloud_sync</span> Synchronizuj wszystko
+                        <span class="material-symbols-outlined">cloud_sync</span> Synchronizuj wszystko (Bazy + Mapa)
                     </button>
                     <button id="btnRefreshPociagi" class="menu-btn menu-btn-secondary" onclick="window.pobierzDane('pociagi', true)">
                         <span class="material-symbols-outlined">train</span> Odśwież rozkłady pociągów
@@ -92,24 +191,16 @@
                     <button id="btnRefreshStacje" class="menu-btn menu-btn-secondary" onclick="window.pobierzDane('stacje', true)">
                         <span class="material-symbols-outlined">map</span> Odśwież słownik stacji GPS
                     </button>
-                </div>
-
-                <div class="menu-btn-group">
-                    <div class="menu-btn-group-label">Powiadomienia i dźwięk</div>
-                    <button id="btnToggleStationAlerts" class="menu-btn menu-btn-secondary" onclick="window.toggleStationApproachAlerts()">
-                        <span class="material-symbols-outlined" id="stationAlertsIcon" style="color:var(--open);">notifications_active</span> 
-                        <span id="stationAlertsLabel">Alarm stacyjny (6 km): WŁĄCZONY</span>
-                    </button>
-                    <button class="menu-btn menu-btn-secondary" onclick="window.testStationAlert()">
-                        <span class="material-symbols-outlined" style="color:var(--primary);">volume_up</span> Przetestuj gong i komunikat (6 km)
-                    </button>
-                    <button id="btnResetTheme" class="menu-btn menu-btn-secondary" onclick="window.resetThemeToAuto()">
-                        <span class="material-symbols-outlined">brightness_auto</span> Motyw: Przywróć systemowy (Auto)
+                    <button id="btnRefreshOrmOffline" class="menu-btn menu-btn-secondary" onclick="window.downloadPolandOrmBaseOffline(true)">
+                        <span class="material-symbols-outlined" style="color:var(--primary);">download_for_offline</span> Pobierz mapę OpenRailwayMap Offline
                     </button>
                 </div>
 
                 <div class="menu-btn-group" style="margin-bottom: 0;">
-                    <div class="menu-btn-group-label">Aktualizacja APK i diagnostyka</div>
+                    <div class="menu-btn-group-label">Wygląd, aktualizacja APK i diagnostyka</div>
+                    <button id="btnResetTheme" class="menu-btn menu-btn-secondary" onclick="window.resetThemeToAuto()">
+                        <span class="material-symbols-outlined">brightness_auto</span> Motyw: Przywróć systemowy (Auto)
+                    </button>
                     <button id="btnCheckApkUpdate" class="menu-btn menu-btn-secondary" onclick="window.checkAppUpdate(true)">
                         <span class="material-symbols-outlined" style="color:var(--open);">system_update</span> Sprawdź aktualizację aplikacji (.apk)
                     </button>
@@ -122,14 +213,10 @@
             <div class="menu-section">
                 <h3><span class="material-symbols-outlined">menu_book</span> Jak działa Czuwak?</h3>
                 <ul style="margin-top: 0; padding-left: 18px; font-size: 0.88rem; color: var(--text-muted); line-height: 1.55; margin-bottom: 0;">
-                    <li><strong>1. Wybierz swój pociąg:</strong> Wpisz numer (np. <em>13100</em>) lub nazwę pociągu. System automatycznie dobierze właściwy dzień kursowania (w tym pociągi nocne w trasie z poprzedniej doby).</li>
-                    <li><strong>2. Włącz śledzenie GPS:</strong> Kliknij pływający przycisk <strong>Celownika (GPS)</strong> w prawym dolnym rogu ekranu.</li>
-                    <li><strong>3. Alarm na 6 km przed stacją:</strong> Gdy pociąg zbliży się na odległość <strong>6 km</strong> przed wjazdem do kolejnej stacji (lub 50% długości szlaku dla krótszych odcinków), Czuwak uruchomi:
-                        <br>• Dwukrotny akustyczny gong PKP (<em>Bim-Bam... Bim-Bam</em>) ze 100% głośnością,
-                        <br>• Wibrację telefonu,
-                        <br>• Powiadomienie systemowe Android oraz baner z odliczaniem kilometrów na żywo i przypomnieniem o <strong>wygłoszeniu komunikatu pożegnalnego</strong>.
-                    </li>
-                    <li><strong>4. Praca Offline:</strong> Rozkłady pociągów pobierane są automatycznie co <strong>24–48h</strong>, a baza współrzędnych GPS stacji aktualizowana jest po wykryciu publikacji <em>LOUD</em>. W czasie jazdy połączenie z internetem nie jest wymagane.</li>
+                    <li><strong>1. Wybierz pociąg i datę wyjazdu:</strong> Wpisz numer lub nazwę pociągu oraz wskaż datę wyjazdu ze stacji początkowej (np. <em>Wczoraj</em> dla pociągu nocnego lub <em>Dzisiaj</em>).</li>
+                    <li><strong>2. Skonfiguruj alarm:</strong> Ustaw suwakiem wyprzedzenie (od 1 do 15 km, domyślnie 6 km) oraz wybierz tryb: <strong>Jednokrotne przypomnienie</strong> lub <strong>Tryb Budzika</strong> (dźwięk w pętli do momentu potwierdzenia na ekranie).</li>
+                    <li><strong>3. Włącz śledzenie GPS i mapę OpenRailwayMap:</strong> Kliknij pływający przycisk <strong>Celownika (GPS)</strong> lub otwórz podgląd trasy na mapie kolejowej OpenRailwayMap (dostępnej również offline).</li>
+                    <li><strong>4. Odporność na zanik GPS / Internetu:</strong> Bazy pociągów, stacji oraz pobrane kafelki OpenRailwayMap działają w 100% offline. W razie zaniku sygnału GPS (np. w tunelu) Czuwak automatycznie podtrzymuje szacowaną pozycję z ostatniej prędkości i rozkładu jazdy.</li>
                 </ul>
             </div>
         </div>
@@ -138,7 +225,7 @@
     <!-- GŁÓWNY INTERFEJS APLIKACJI -->
     <div class="container">
         <div class="header-wrapper">
-            <h1><img src="favicon-ic.svg" alt="Logo" class="header-favicon" width="32" height="32"> Czuwak</h1>
+            <h1><img src="favicon.svg" alt="Logo Czuwak" class="header-favicon" width="32" height="32"> Czuwak</h1>
             <div class="header-controls">
                 <button class="burger-btn" onclick="window.changeFontSize(-2)" aria-label="Zmniejsz tekst">
                     <span class="material-symbols-outlined">text_decrease</span>
@@ -163,6 +250,14 @@
 
         <!-- INTELIGENTNY BANER AKTUALIZACJI BAZ DANYCH -->
         <div id="dbUpdateBanner" style="display: none; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; text-align: center; padding: 12px; font-size: 0.95rem; font-weight: bold; justify-content: center; align-items: center; gap: 8px; cursor: pointer; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        </div>
+
+        <!-- OSTRZEŻENIE O UTRACIE SYGNAŁU GPS (DEAD RECKONING FALLBACK) -->
+        <div id="gpsSignalWarningBanner" style="display: none; padding: 11px 14px; border-radius: 10px; margin-bottom: 12px; background: rgba(245, 158, 11, 0.16); border: 1.5px solid var(--warning); color: var(--text); align-items: center; gap: 10px; font-size: 0.85rem; line-height: 1.35;">
+            <span class="material-symbols-outlined" style="color: var(--warning); font-size: 1.5rem; flex-shrink: 0;">satellite_alt</span>
+            <div id="gpsSignalWarningText" style="flex: 1;">
+                <strong>Brak sygnału satelitów GPS:</strong> Pozycja pociągu jest tymczasowo szacowana na podstawie prędkości i rozkładu jazdy.
+            </div>
         </div>
 
         <!-- BANER AKTUALIZACJI W TLE -->
@@ -191,6 +286,17 @@
                 <div id="syncProgressBar" style="width: 0%; height: 100%; background: var(--open); transition: width 0.2s ease;"></div>
             </div>
             <div id="dateBar" class="date-bar">Ładowanie zegara...</div>
+            <!-- Szybki pasek aktywnej konfiguracji alarmu -->
+            <div id="quickConfigStrip" onclick="window.toggleMenu()" style="margin-top: 8px; padding: 6px 10px; border-radius: 8px; background: var(--input-bg); border: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; color: var(--text-muted); cursor: pointer;">
+                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                    <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--primary);">notifications_active</span>
+                    Alarm: <strong id="stripAlertDist" style="color: var(--text);">6.0 km</strong> przed stacją
+                </span>
+                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                    Tryb: <strong id="stripAlertMode" style="color: var(--primary);">Jednokrotny</strong>
+                    <span class="material-symbols-outlined" style="font-size: 0.95rem;">settings</span>
+                </span>
+            </div>
             <div id="partialSyncWarningBanner" style="display: none; margin-top: 10px;"></div>
         </div>
 
@@ -205,6 +311,20 @@
             </div>
                          
             <div id="searchTrainBox">
+                <!-- WYBÓR DATY WYJAZDU POCIĄGU PRZEZ PRACOWNIKA -->
+                <div style="background: var(--input-bg); border: 1px solid var(--glass-border); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px;">
+                    <label for="trainDepartureDateInput" style="display: flex; align-items: center; gap: 6px; font-size: 0.84rem; font-weight: 700; color: var(--text); margin-bottom: 8px;">
+                        <span class="material-symbols-outlined icon-sm" style="color: var(--primary);">calendar_month</span>
+                        Data wyjazdu pociągu (ze stacji początkowej):
+                    </label>
+                    <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+                        <button type="button" id="btnDateYesterday" class="date-quick-btn" onclick="window.setRelativeTrainDate(-1)">Wczoraj</button>
+                        <button type="button" id="btnDateToday" class="date-quick-btn active" onclick="window.setRelativeTrainDate(0)">Dzisiaj</button>
+                        <button type="button" id="btnDateTomorrow" class="date-quick-btn" onclick="window.setRelativeTrainDate(1)">Jutro</button>
+                    </div>
+                    <input type="date" id="trainDepartureDateInput" onchange="window.onTrainDateChange(this.value)" style="width: 100%; margin-bottom: 0; padding: 8px 10px; font-weight: 700; font-size: 0.92rem;">
+                </div>
+
                 <div class="toggle-container" style="background: var(--input-bg); padding: 4px; margin-bottom: 10px;">
                     <div id="subTabTrainNumber" class="toggle-btn active" onclick="window.switchTrainMode('number')" style="padding: 8px; font-size: 0.85rem;">
                         <span class="material-symbols-outlined icon-sm">tag</span> Po numerze
@@ -258,15 +378,43 @@
             </div>
         </div>
         <div id="mainStatusBox">STATUS</div>
+
+        <!-- PANEL PODGLĄDU MAPY OPENRAILWAYMAP (ONLINE + OFFLINE DB) -->
+        <div id="openRailwayMapSection" style="display: none;">
+            <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+                <button type="button" id="btnToggleOrmMap" class="menu-btn menu-btn-secondary" onclick="window.toggleOpenRailwayMap()" style="flex: 1; margin: 0; justify-content: center; min-height: 44px;">
+                    <span class="material-symbols-outlined" style="color: var(--primary);">map</span>
+                    <span id="btnToggleOrmMapLabel">Pokaż trasę na OpenRailwayMap</span>
+                </button>
+                <button type="button" id="btnCacheRouteOrm" class="menu-btn menu-btn-secondary" onclick="window.downloadCurrentRouteMapOffline()" style="width: auto; margin: 0; padding: 8px 14px; min-height: 44px;" title="Zapisz kafelki OpenRailwayMap dla tej trasy do bazy offline">
+                    <span class="material-symbols-outlined" style="color: var(--open);">download_for_offline</span>
+                    <span id="btnCacheRouteOrmLabel">Zapisz mapę trasy Offline</span>
+                </button>
+            </div>
+            <div id="openRailwayMapWrapper" class="orm-map-wrapper" style="display: none;">
+                <div style="padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; color: var(--text-muted); border-bottom: 1px solid var(--glass-border);">
+                    <span style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--text);">
+                        <span class="material-symbols-outlined icon-sm" style="color: var(--primary);">train</span>
+                        OpenRailwayMap (Szlaki i sygnalizacja)
+                    </span>
+                    <span id="ormOfflineBadge" style="font-weight: 700; color: var(--open);">Cache Offline aktywny</span>
+                </div>
+                <div id="openRailwayMapContainer"></div>
+            </div>
+        </div>
+
         <div id="detailsList" class="details-container"></div>
     </div>
          
     <!-- Pływające przyciski (FAB) -->
     <div id="trainFabContainer" class="fab-container" style="display: none;">
+        <button class="fab-btn" id="fabMapBtn" onclick="window.toggleOpenRailwayMap(true)" title="Mapa szlaku OpenRailwayMap">
+            <span class="material-symbols-outlined">map</span>
+        </button>
         <button class="fab-btn" id="fabTimeBtn" onclick="window.locateTrainByTime()" title="Lokalizuj wg rozkładu">
             <span class="material-symbols-outlined">schedule</span>
         </button>
-        <button class="fab-btn fab-gps" id="fabGpsBtn" onclick="window.locateTrainByGPS()" title="Czuwak GPS (alarm 6 km przed stacją)">
+        <button class="fab-btn fab-gps" id="fabGpsBtn" onclick="window.locateTrainByGPS()" title="Czuwak GPS">
             <span class="material-symbols-outlined">my_location</span>
         </button>
     </div>

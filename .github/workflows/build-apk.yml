@@ -77,7 +77,7 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: "Czuwak ${{ steps.version.outputs.app_version }} (build ${{ steps.version.outputs.app_build }})"
           body: |
-            Automatyczne wydanie aplikacji **Czuwak PKP Intercity** (${{ steps.version.outputs.app_version }}, kompilacja `${{ steps.version.outputs.app_build }}`).
+            Automatyczne wydanie aplikacji **Czuwak – Asystent Drużyn Konduktorskich** (${{ steps.version.outputs.app_version }}, kompilacja `${{ steps.version.outputs.app_build }}`).
             
             📥 **Bezpośredni link do pobrania / aktualizacji `.apk`:**
             `https://github.com/${{ github.repository }}/releases/latest/download/czuwak.apk`

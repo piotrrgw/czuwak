@@ -15,9 +15,10 @@ const ASSETS_TO_CACHE = [
     '/firebase-config.js',
     '/manifest.json',
     '/favicon.svg',
-    '/favicon-ic.svg',
     '/apple-touch-icon.png',
-    'https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js',
+    '/vendor/localforage.min.js',
+    '/vendor/leaflet/leaflet.js',
+    '/vendor/leaflet/leaflet.css',
     'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js',
     'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js',
     'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'

@@ -1,24 +1,25 @@
 # 🚆 Czuwak – Asystent Drużyn Konduktorskich (DK)
 
-**Czuwak** to lekka aplikacja mobilna (`.apk` / PWA) stworzona dla pracowników Drużyn Konduktorskich PKP Intercity. Jej głównym zadaniem jest śledzenie pozycji pociągu w czasie rzeczywistym (w 100% offline w czasie jazdy) oraz informowanie na **6 km przed wjazdem do stacji** o zbliżaniu się do postoju i przypominanie o **wygłoszeniu komunikatu pożegnalnego**.
+**Czuwak** to lekka aplikacja mobilna (`.apk` / PWA) stworzona dla pracowników Drużyn Konduktorskich. Jej głównym zadaniem jest śledzenie pozycji pociągu w czasie rzeczywistym (w 100% offline w czasie jazdy) oraz informowanie przed wjazdem do stacji (domyślnie **6 km**, z regulacją suwakiem **1–15 km**) o zbliżaniu się do postoju i przypominanie o **wygłoszeniu komunikatu pożegnalnego**.
 
 ---
 
 ## ⚙️ Główne funkcje
 
 1. **Synchronizacja Offline-First:**
-   - **Rozkłady pociągów (`trasy-ic` / `pociagi_ic`):** Pobierane automatycznie co **24–48h** (lub po wykryciu nowej wersji w `system/db_status`) i zapisywane w pamięci lokalnej urządzenia (`IndexedDB` / `localforage`).
-   - **Słownik stacji GPS (`akb-data` / `public_data/stations_dict`):** Pobierany jednorazowo do pamięci telefonu i odświeżany wyłącznie wtedy, gdy w bazie pojawi się **publikacja głośna (`LOUD` – `lastUpdateStations`)**.
-2. **Inteligentny dobór trasy i wariantu kursowania:**
+   - **Rozkłady pociągów:** Pobierane automatycznie co **24–48h** (lub po wykryciu nowej wersji w `system/db_status`) i zapisywane w pamięci lokalnej urządzenia (`IndexedDB` / `localforage`).
+   - **Słownik stacji GPS:** Pobierany jednorazowo do pamięci telefonu i odświeżany wyłącznie wtedy, gdy w bazie pojawi się **publikacja głośna (`LOUD` – `lastUpdateStations`)**.
+   - **Mapa Kolejowa OpenRailwayMap Offline:** Podgląd trasy pociągu na mapie szlaków kolejowych z zapisem kafelków offline w bazie `IndexedDB` (`czuwak_orm_tiles_v1`).
+2. **Wybór daty wyjazdu i dobór wariantu kursowania:**
+   - Ręczny wybór daty wyjazdu pociągu (**Wczoraj | Dzisiaj | Jutro** lub dowolna data z kalendarza).
    - Wyszukiwanie pociągu po **numerze** (z obsługą parzystego/nieparzystego kierunku relacji) lub **nazwie** oraz historia **5 ostatnich pociągów**.
-   - Automatyczna obsługa pociągów nocnych (w trasie z poprzedniej doby).
    - Przejrzysta tabela trasy: **Stacja | Przyjazd | Odjazd** wraz z animowanym składem pociągu.
-3. **Czuwak GPS i Alarm 6 km przed stacją:**
-   - Wyznaczanie bieżącego odcinka szlaku (`Stacja A ➔ Stacja B`) na podstawie rzutu geometrycznego GPS oraz wektora ruchu (`heading`).
-   - Na **6 km przed wjazdem do stacji** (lub w połowie odcinka, jeśli stacje dzielą mniej niż 12 km):
-     - 🔊 Dwukrotny akustyczny gong kolejowy PKP (*Bim-Bam... Bim-Bam*, `698.46 Hz` / `880.00 Hz`) ze 100% głośnością cyfrową,
-     - 📳 Zsynchronizowana wibracja telefonu,
-     - 🔔 Powiadomienie systemowe Android (`@capacitor/local-notifications` / Service Worker) oraz pływający baner z odliczaniem kilometrów na żywo i przypomnieniem: **„Wygłoś komunikat pożegnalny”**.
+3. **Czuwak GPS, Odporność na utratę sygnału i Konfigurowalny Alarm:**
+   - Wyznaczanie bieżącego odcinka szlaku (`Stacja A ➔ Stacja B`) ze wzmocnioną ochroną przed przerzucaniem pociągu za stację na łukach (*Kalisz Fix v2* – analiza wektora ruchu do 15 km, pochodnej dystansu i zaliczonych stacji).
+   - **Odporność na utratę GPS / Internetu:** Po utracie sygnału GPS (np. w tunelu lub wagonie ekranowanym) po 20 sekundach włącza się tryb estymacji (**Dead Reckoning**) na podstawie ostatniej prędkości i rozkładu jazdy.
+   - **Suwak dystansu alarmu (1–15 km)** oraz wybór trybu powiadomienia:
+     - 🔔 **Jednokrotne przypomnienie** (dwukrotny gong + wibracja),
+     - ⏰ **Tryb Budzika (do potwierdzenia)** – cykliczny sygnał dźwiękowy i wibracje powtarzane do momentu kliknięcia przycisku **„Potwierdź komunikat / Wycisz Czuwak”**.
 
 ---
 
