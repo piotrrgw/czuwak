@@ -519,33 +519,41 @@ window.showGpsSignalWarning = (msgHtml) => {
 // ==========================================
 // KÓŁKO PRĘDKOŚCI (KM/H) I STATUSU SYGNAŁU GPS
 // ==========================================
+const GPS_BADGE_SVGS = {
+    ok: '\x3Csvg viewBox="0 0 24 24" aria-hidden="true"\x3E\x3Cpath d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/\x3E\x3C/svg\x3E',
+    bts: '\x3Csvg viewBox="0 0 24 24" aria-hidden="true"\x3E\x3Cpath d="M2 22h20V2L2 22zm18-2h-3V9.83l3-3V20z"/\x3E\x3C/svg\x3E',
+    tunnel: '\x3Csvg viewBox="0 0 24 24" aria-hidden="true"\x3E\x3Cpath d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/\x3E\x3C/svg\x3E',
+    searching: '\x3Csvg viewBox="0 0 24 24" aria-hidden="true"\x3E\x3Cpath d="M20.94 11A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/\x3E\x3C/svg\x3E',
+    off: '\x3Csvg viewBox="0 0 24 24" aria-hidden="true"\x3E\x3Cpath d="M20.94 11A8.994 8.994 0 0 0 13 3.06V1h-2v2.06c-.98.11-1.91.38-2.77.78l1.53 1.53C10.46 5.13 11.22 5 12 5c3.87 0 7 3.13 7 7 0 .78-.13 1.54-.37 2.24l1.53 1.53c.4-.86.67-1.79.78-2.77H23v-2h-2.06zM3.27 2L2 3.27l3.07 3.07C3.99 7.82 3.27 9.57 3.06 11.5H1v2h2.06A8.994 8.994 0 0 0 11 21.44V23.5h2v-2.06c1.93-.21 3.68-.93 5.16-2.01L20.73 22 22 20.73 3.27 2zM12 19c-3.87 0-7-3.13-7-7 0-1.61.55-3.09 1.46-4.27l9.81 9.81A6.92 6.92 0 0 1 12 19z"/\x3E\x3C/svg\x3E'
+};
+
 window.updateSpeedAndGpsIndicator = (speedKmH, gpsState = 'searching') => {
     const circle = document.getElementById('fabSpeedGpsCircle');
     const valEl = document.getElementById('fabSpeedValue');
     const unitEl = document.getElementById('fabSpeedUnit');
-    const iconEl = document.getElementById('fabGpsStatusIcon');
-    if (!circle || !valEl || !iconEl) return;
+    const badgeEl = document.getElementById('fabGpsStatusBadge');
+    if (!circle || !valEl || !badgeEl) return;
 
     circle.classList.remove('gps-ok', 'gps-bts', 'gps-tunnel', 'gps-off');
     if (gpsState === 'ok') {
         circle.classList.add('gps-ok');
-        iconEl.innerText = 'satellite_alt';
+        badgeEl.innerHTML = GPS_BADGE_SVGS.ok;
         if (unitEl) unitEl.innerText = 'km/h';
     } else if (gpsState === 'bts') {
         circle.classList.add('gps-bts');
-        iconEl.innerText = 'cell_tower';
+        badgeEl.innerHTML = GPS_BADGE_SVGS.bts;
         if (unitEl) unitEl.innerText = 'km/h BTS';
     } else if (gpsState === 'tunnel') {
         circle.classList.add('gps-tunnel');
-        iconEl.innerText = 'explore';
+        badgeEl.innerHTML = GPS_BADGE_SVGS.tunnel;
         if (unitEl) unitEl.innerText = 'tunel';
     } else if (gpsState === 'searching') {
         circle.classList.add('gps-off');
-        iconEl.innerText = 'gps_searching';
+        badgeEl.innerHTML = GPS_BADGE_SVGS.searching;
         if (unitEl) unitEl.innerText = 'szukam';
     } else {
         circle.classList.add('gps-off');
-        iconEl.innerText = 'gps_off';
+        badgeEl.innerHTML = GPS_BADGE_SVGS.off;
         if (unitEl) unitEl.innerText = 'wył.';
     }
 
@@ -1573,7 +1581,9 @@ async function fetchAndCacheSingleTile(layerPrefix, url, tileKey) {
         if (existing) return true;
         const resp = await fetch(url, { mode: 'cors' });
         if (!resp.ok) return false;
+        if (resp.headers && resp.headers.get('x-blocked')) return false;
         const blob = await resp.blob();
+        if (!blob || blob.size < 100 || (blob.type && !blob.type.includes('image'))) return false;
         await ormTilesDb.setItem(tileKey, blob);
         return true;
     } catch (e) {
@@ -1588,9 +1598,6 @@ function createOfflineCapableTileLayer(urlTemplate, layerPrefix, options) {
             const tile = document.createElement('img');
             L.DomEvent.on(tile, 'load', L.bind(this._tileOnLoad, this, done, tile));
             L.DomEvent.on(tile, 'error', L.bind(this._tileOnError, this, done, tile));
-            if (this.options.crossOrigin || this.options.crossOrigin === '') {
-                tile.crossOrigin = this.options.crossOrigin === true ? '' : this.options.crossOrigin;
-            }
             tile.alt = '';
             tile.setAttribute('role', 'presentation');
 
@@ -1598,7 +1605,7 @@ function createOfflineCapableTileLayer(urlTemplate, layerPrefix, options) {
             const onlineUrl = this.getTileUrl(coords);
 
             ormTilesDb.getItem(tileKey).then((cachedBlob) => {
-                if (cachedBlob && (cachedBlob instanceof Blob)) {
+                if (cachedBlob && (cachedBlob instanceof Blob) && cachedBlob.size >= 100) {
                     const objUrl = URL.createObjectURL(cachedBlob);
                     tile.src = objUrl;
                     return;
@@ -1606,10 +1613,15 @@ function createOfflineCapableTileLayer(urlTemplate, layerPrefix, options) {
                 if (navigator.onLine) {
                     fetch(onlineUrl, { mode: 'cors' })
                         .then(r => {
-                            if (!r.ok) throw new Error('HTTP ' + r.status);
+                            if (!r.ok || (r.headers && r.headers.get('x-blocked'))) {
+                                throw new Error('Tile HTTP ' + r.status);
+                            }
                             return r.blob();
                         })
                         .then(blob => {
+                            if (!blob || blob.size < 100 || (blob.type && !blob.type.includes('image'))) {
+                                throw new Error('Invalid tile blob');
+                            }
                             ormTilesDb.setItem(tileKey, blob).catch(() => {});
                             tile.src = URL.createObjectURL(blob);
                         })
@@ -1655,8 +1667,8 @@ window.downloadPolandOrmBaseOffline = async function(isManual = false) {
                     url: 'https://a.tiles.openrailwaymap.org/standard/' + z + '/' + x + '/' + y + '.png'
                 });
                 tileTasks.push({
-                    key: 'osm_' + z + '_' + x + '_' + y,
-                    url: 'https://tile.openstreetmap.org/' + z + '/' + x + '/' + y + '.png'
+                    key: 'carto_' + z + '_' + x + '_' + y,
+                    url: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/' + z + '/' + x + '/' + y + '.png'
                 });
             }
         }
@@ -1721,9 +1733,9 @@ window.downloadCurrentRouteMapOffline = async function(isManual = false) {
         if (!tileMap.has(ormKey)) {
             tileMap.set(ormKey, 'https://a.tiles.openrailwaymap.org/standard/' + z + '/' + x + '/' + y + '.png');
         }
-        const osmKey = 'osm_' + z + '_' + x + '_' + y;
-        if (!tileMap.has(osmKey)) {
-            tileMap.set(osmKey, 'https://tile.openstreetmap.org/' + z + '/' + x + '/' + y + '.png');
+        const cartoKey = 'carto_' + z + '_' + x + '_' + y;
+        if (!tileMap.has(cartoKey)) {
+            tileMap.set(cartoKey, 'https://a.basemaps.cartocdn.com/rastertiles/voyager/' + z + '/' + x + '/' + y + '.png');
         }
     };
 
@@ -1788,12 +1800,13 @@ window.initOrUpdateOpenRailwayMap = function() {
             zoomControl: true
         });
 
-        const baseOsm = createOfflineCapableTileLayer(
-            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            'osm',
+        const baseCarto = createOfflineCapableTileLayer(
+            'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+            'carto',
             {
-                maxZoom: 17,
-                attribution: '&' + 'copy; OpenStreetMap'
+                maxZoom: 18,
+                subdomains: 'abcd',
+                attribution: '&' + 'copy; OpenStreetMap &' + 'copy; CARTO'
             }
         );
         const railwayOverlay = createOfflineCapableTileLayer(
@@ -1806,7 +1819,7 @@ window.initOrUpdateOpenRailwayMap = function() {
             }
         );
 
-        if (baseOsm) baseOsm.addTo(window._ormLeafletMap);
+        if (baseCarto) baseCarto.addTo(window._ormLeafletMap);
         if (railwayOverlay) railwayOverlay.addTo(window._ormLeafletMap);
         window._ormRouteLayerGroup = L.layerGroup().addTo(window._ormLeafletMap);
     }
@@ -2063,9 +2076,14 @@ window.renderRecentView = () => {
 
 window.selectTrainByNumber = (numerPociagu) => {
     window.stopTrainTracking();
+    window._configPanelForceExpanded = false;
     window.switchMode('train');
     window.switchTrainMode('number');
-    document.getElementById('trainInput').value = numerPociagu;
+    const trIn = document.getElementById('trainInput');
+    if (trIn) {
+        trIn.value = numerPociagu;
+        try { trIn.blur(); } catch (e) {}
+    }
     window.lastSearchedTrainNum = numerPociagu;
     window.forceExactTrainMatch = true;
 
@@ -2078,7 +2096,9 @@ window.clearSearch = (inputId) => {
     if (el) el.value = '';
 
     window.stopTrainTracking();
+    window._currentTrainObject = null;
     window.forceExactTrainMatch = false;
+    window.expandTrainConfigPanel();
 
     document.getElementById('detailsList').innerHTML = '';
     document.getElementById('detailsList').style.display = 'none';
@@ -2325,7 +2345,6 @@ function scoreTrainVariantForSelectedDate(train, now) {
         };
     }
 
-    // Jeśli wariant ma inne daty w bazie, wybierz najbliższy względem wybranej daty
     let minDiffDays = Infinity;
     dates.forEach(dStr => {
         const dObj = parseYYYYMMDDToDate(dStr, selectedDateObj);
@@ -2361,6 +2380,189 @@ window.centerOnElement = (element, smooth = true) => {
 };
 
 // ==========================================
+// ZWIJANIE / UKRYWANIE PANELU KONFIGURACJI PO SKONFIGUROWANIU
+// ==========================================
+window._configPanelForceExpanded = false;
+
+window.collapseTrainConfigPanel = () => {
+    window._configPanelForceExpanded = false;
+    const body = document.getElementById('trainConfigCollapsibleBody');
+    const bar = document.getElementById('collapsedTrainConfigBar');
+    if (body && bar && window._currentTrainObject) {
+        body.style.display = 'none';
+        bar.style.display = 'flex';
+    }
+};
+
+window.expandTrainConfigPanel = () => {
+    window._configPanelForceExpanded = true;
+    const body = document.getElementById('trainConfigCollapsibleBody');
+    const bar = document.getElementById('collapsedTrainConfigBar');
+    if (body) body.style.display = 'block';
+    if (bar) bar.style.display = 'none';
+};
+
+window.toggleTrainConfigPanel = (forceOpen) => {
+    const body = document.getElementById('trainConfigCollapsibleBody');
+    if (!body) return;
+    if (forceOpen === true || body.style.display === 'none') {
+        window.expandTrainConfigPanel();
+    } else {
+        window.collapseTrainConfigPanel();
+    }
+};
+
+window.syncCollapsedConfigBar = (trainTitleStr, dutySubStr) => {
+    const tEl = document.getElementById('collapsedConfigTrainTitle');
+    const sEl = document.getElementById('collapsedConfigDutySub');
+    if (tEl && trainTitleStr) tEl.innerText = trainTitleStr;
+    if (sEl && dutySubStr) sEl.innerText = dutySubStr;
+};
+
+// ==========================================
+// AUTOMATYCZNY ZAPIS RZECZYWISTEGO POSTOJU (HH:MM:SS) I ODJAZDU (HH:MM:SS) + ODHACZANIE STACJI
+// ==========================================
+window._stationActualLog = {};
+window._currentStandingStationIdx = null;
+
+function formatNowHHMMSS() {
+    const d = new Date();
+    return String(d.getHours()).padStart(2, '0') + ':' +
+           String(d.getMinutes()).padStart(2, '0') + ':' +
+           String(d.getSeconds()).padStart(2, '0');
+}
+
+function getActualTimesStorageKey() {
+    const trNum = window._currentActiveTrainNumber || 'TR';
+    const depDate = window.selectedTrainDepartureDate || getLocalYYYYMMDD(new Date());
+    return 'CZUWAK_ACTUAL_TIMES_' + trNum + '_' + depDate;
+}
+
+function loadStationActualLog() {
+    window._stationActualLog = {};
+    try {
+        const raw = localStorage.getItem(getActualTimesStorageKey());
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+                window._stationActualLog = parsed;
+            }
+        }
+    } catch (e) {}
+}
+
+function saveStationActualLog() {
+    try {
+        localStorage.setItem(getActualTimesStorageKey(), JSON.stringify(window._stationActualLog || {}));
+    } catch (e) {}
+}
+
+function getCheckmarkSvgHtml(isChecked) {
+    if (isChecked) {
+        return '\x3Csvg viewBox="0 0 24 24" aria-hidden="true"\x3E\x3Cpath d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/\x3E\x3C/svg\x3E';
+    }
+    return '\x3Csvg viewBox="0 0 24 24" aria-hidden="true"\x3E\x3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/\x3E\x3C/svg\x3E';
+}
+
+window.renderStationRowActualUI = (idx) => {
+    const entry = (window._stationActualLog && window._stationActualLog[idx]) ? window._stationActualLog[idx] : null;
+    const isChecked = !!(entry && entry.checked);
+
+    const checkBtn = document.getElementById('stationCheckBtn_' + idx);
+    if (checkBtn) {
+        checkBtn.classList.toggle('checked', isChecked);
+        checkBtn.innerHTML = getCheckmarkSvgHtml(isChecked);
+    }
+
+    const stopTagEl = document.getElementById('stationStopTag_' + idx);
+    if (stopTagEl) {
+        stopTagEl.style.display = isChecked ? 'inline-flex' : 'none';
+    }
+
+    const arrBox = document.getElementById('actualArrBox_' + idx);
+    if (arrBox) {
+        if (entry && entry.actualArr) {
+            arrBox.innerHTML = '\x3Cdiv class="actual-time-badge arr" title="Rzeczywisty czas zatrzymania na stacji"\x3EPostój: \x3Cstrong\x3E' + escapeHTML(entry.actualArr) + '\x3C/strong\x3E\x3C/div\x3E';
+        } else {
+            arrBox.innerHTML = '';
+        }
+    }
+
+    const depBox = document.getElementById('actualDepBox_' + idx);
+    if (depBox) {
+        if (entry && entry.actualDep) {
+            depBox.innerHTML = '\x3Cdiv class="actual-time-badge dep" title="Rzeczywisty czas odjazdu ze stacji"\x3EOdj.: \x3Cstrong\x3E' + escapeHTML(entry.actualDep) + '\x3C/strong\x3E\x3C/div\x3E';
+        } else {
+            depBox.innerHTML = '';
+        }
+    }
+};
+
+window.recordStationArrivalStop = (idx, customTimeStr = null) => {
+    if (idx === null || idx === undefined || idx < 0) return;
+    if (!window._stationActualLog) window._stationActualLog = {};
+    if (!window._stationActualLog[idx]) {
+        window._stationActualLog[idx] = { checked: false, actualArr: null, actualDep: null };
+    }
+    const entry = window._stationActualLog[idx];
+    let changed = false;
+    if (!entry.checked) {
+        entry.checked = true;
+        changed = true;
+    }
+    if (!entry.actualArr) {
+        entry.actualArr = customTimeStr || formatNowHHMMSS();
+        changed = true;
+    }
+    if (changed) {
+        saveStationActualLog();
+        window.renderStationRowActualUI(idx);
+    }
+};
+
+window.recordStationDeparture = (idx, customTimeStr = null) => {
+    if (idx === null || idx === undefined || idx < 0) return;
+    if (!window._stationActualLog) window._stationActualLog = {};
+    if (!window._stationActualLog[idx]) {
+        window._stationActualLog[idx] = { checked: false, actualArr: null, actualDep: null };
+    }
+    const entry = window._stationActualLog[idx];
+    let changed = false;
+    if (!entry.checked) {
+        entry.checked = true;
+        changed = true;
+    }
+    if (!entry.actualDep) {
+        entry.actualDep = customTimeStr || formatNowHHMMSS();
+        changed = true;
+    }
+    if (changed) {
+        saveStationActualLog();
+        window.renderStationRowActualUI(idx);
+    }
+};
+
+window.toggleStationStopManual = (idxStr) => {
+    const idx = parseInt(idxStr, 10);
+    if (isNaN(idx) || idx < 0) return;
+    if (!window._stationActualLog) window._stationActualLog = {};
+    const cur = window._stationActualLog[idx];
+    if (!cur || !cur.checked) {
+        window._stationActualLog[idx] = {
+            checked: true,
+            actualArr: (cur && cur.actualArr) ? cur.actualArr : formatNowHHMMSS(),
+            actualDep: (cur && cur.actualDep) ? cur.actualDep : null
+        };
+    } else if (!cur.actualDep) {
+        cur.actualDep = formatNowHHMMSS();
+    } else {
+        delete window._stationActualLog[idx];
+    }
+    saveStationActualLog();
+    window.renderStationRowActualUI(idx);
+};
+
+// ==========================================
 // RENDEROWANIE WIDOKU TRASY POCIĄGU (STACJA | PRZYJAZD | ODJAZD)
 // ==========================================
 function wyswietlWidok() {
@@ -2378,6 +2580,8 @@ function wyswietlWidok() {
 
         if (!nrPociagu || nrPociagu.length < 2) {
             window.stopTrainTracking();
+            window._currentTrainObject = null;
+            window.expandTrainConfigPanel();
             if (ormSec) ormSec.style.display = 'none';
             const dutyBox = document.getElementById('crewDutyConfigBox');
             if (dutyBox) dutyBox.style.display = 'none';
@@ -2401,6 +2605,8 @@ function wyswietlWidok() {
 
         if (pociagi.length === 0) {
             window.stopTrainTracking();
+            window._currentTrainObject = null;
+            window.expandTrainConfigPanel();
             if (ormSec) ormSec.style.display = 'none';
             const dutyBox = document.getElementById('crewDutyConfigBox');
             if (dutyBox) dutyBox.style.display = 'none';
@@ -2414,6 +2620,8 @@ function wyswietlWidok() {
         const nazwaPociagu = String(document.getElementById('trainNameInput').value || '').trim();
         if (!nazwaPociagu || nazwaPociagu.length < 3) {
             window.stopTrainTracking();
+            window._currentTrainObject = null;
+            window.expandTrainConfigPanel();
             if (ormSec) ormSec.style.display = 'none';
             const dutyBox = document.getElementById('crewDutyConfigBox');
             if (dutyBox) dutyBox.style.display = 'none';
@@ -2425,6 +2633,8 @@ function wyswietlWidok() {
         pociagi = (bazaPociagow || []).filter(p => p.nazwa && String(p.nazwa).toUpperCase() === nazwaPociagu.toUpperCase());
         if (pociagi.length === 0) {
             window.stopTrainTracking();
+            window._currentTrainObject = null;
+            window.expandTrainConfigPanel();
             if (ormSec) ormSec.style.display = 'none';
             const dutyBox = document.getElementById('crewDutyConfigBox');
             if (dutyBox) dutyBox.style.display = 'none';
@@ -2446,6 +2656,8 @@ function wyswietlWidok() {
         generujWidokTrasy(bestMatch.pociag, listContainer, mainBox, bestMatch);
     } else {
         window.stopTrainTracking();
+        window._currentTrainObject = null;
+        window.expandTrainConfigPanel();
         if (ormSec) ormSec.style.display = 'none';
         const fabContainer = document.getElementById('trainFabContainer');
         if (fabContainer) fabContainer.style.display = 'none';
@@ -2500,7 +2712,7 @@ window._crewDutyEndStationName = '';
 window._crewDutyCompleted = false;
 window._currentTrainObject = null;
 
-window.onCrewDutySegmentChange = () => {
+window.onCrewDutySegmentChange = (autoCollapse = false) => {
     const startSel = document.getElementById('dutyStartStationSelect');
     const endSel = document.getElementById('dutyEndStationSelect');
     if (!startSel || !endSel) return;
@@ -2522,6 +2734,9 @@ window.onCrewDutySegmentChange = () => {
     window._crewDutyStartIdx = sIdx;
     window._crewDutyEndIdx = eIdx;
     window._crewDutyCompleted = false;
+    if (autoCollapse) {
+        window._configPanelForceExpanded = false;
+    }
 
     const trainNum = window._currentActiveTrainNumber || '';
     if (trainNum) {
@@ -2550,7 +2765,7 @@ window.setCrewDutyEndStation = (endIdx) => {
         startSel.value = String(Math.max(0, targetEnd - 1));
     }
     endSel.value = String(targetEnd);
-    window.onCrewDutySegmentChange();
+    window.onCrewDutySegmentChange(true);
 };
 
 function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
@@ -2569,6 +2784,7 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
         window._prevStationDistances = {};
         window._crewDutyCompleted = false;
         window._smoothedSpeedKmH = null;
+        window._currentStandingStationIdx = null;
         if (window._stationApproachAlertsFired) window._stationApproachAlertsFired.clear();
         if (window._alarmAcknowledgedForKey) window._alarmAcknowledgedForKey.clear();
     }
@@ -2586,6 +2802,9 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
             relacja: relacjaStr
         });
     }
+
+    // Wczytaj zapisane rzeczywiste czasy postojów i odjazdów (HH:MM:SS) dla tego pociągu i daty wyjazdu
+    loadStationActualLog();
 
     // Konfiguracja odcinka obsługi DK (Stacja objęcia -> Stacja zmiany DK)
     let savedStartIdx = 0;
@@ -2639,6 +2858,18 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
 
     const matchedDate = bestMatch && bestMatch.date ? escapeHTML(bestMatch.date) : 'Wybrana data';
     const currentDistStr = window.getAlertDistanceKm().toFixed(1) + ' km';
+
+    // Aktualizacja paska zwiniętej konfiguracji i samoczynne zwinięcie po skonfigurowaniu
+    const shortDateStr = formatPlDate(window.selectedTrainDepartureDate || '');
+    const collapsedTitle = (pociag.numer || '') + (pociag.nazwa ? (' \u2022 ' + pociag.nazwa) : '') + (shortDateStr ? (' (' + shortDateStr + ')') : '');
+    const collapsedSub = 'DK: ' + crewStartStationName + ' \u2192 ' + window._crewDutyEndStationName;
+    window.syncCollapsedConfigBar(collapsedTitle, collapsedSub);
+
+    const activeEl = document.activeElement;
+    const isTypingInSearch = activeEl && (activeEl.id === 'trainInput' || activeEl.id === 'trainNameInput');
+    if (!window._configPanelForceExpanded && !isTypingInSearch) {
+        window.collapseTrainConfigPanel();
+    }
 
     const dutyStatusHeaderHtml = window._crewDutyCompleted
         ? ('\x3Cdiv id="crewDutyStatusHeader" style="background: rgba(34, 197, 94, 0.16); border-bottom: 1.5px solid #22c55e; padding: 10px 15px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;"\x3E' +
@@ -2745,6 +2976,9 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
         const absArrAttr = (stAbs.arr !== null) ? ' data-abs-arr="' + stAbs.arr + '"' : '';
         const absDepAttr = (stAbs.dep !== null) ? ' data-abs-dep="' + stAbs.dep + '"' : '';
 
+        const actualEntry = (window._stationActualLog && window._stationActualLog[idx]) ? window._stationActualLog[idx] : null;
+        const isStopChecked = !!(actualEntry && actualEntry.checked);
+
         let dutyRoleBadgeHtml = '';
         if (idx === window._crewDutyStartIdx) {
             dutyRoleBadgeHtml =
@@ -2768,19 +3002,35 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
                 '\x3C/div\x3E';
         }
 
-        let arrCellHtml = escapeHTML(arrStr);
+        const actualArrHtml = (actualEntry && actualEntry.actualArr)
+            ? ('\x3Cdiv class="actual-time-badge arr" title="Rzeczywisty czas zatrzymania na stacji"\x3EPostój: \x3Cstrong\x3E' + escapeHTML(actualEntry.actualArr) + '\x3C/strong\x3E\x3C/div\x3E')
+            : '';
+        const actualDepHtml = (actualEntry && actualEntry.actualDep)
+            ? ('\x3Cdiv class="actual-time-badge dep" title="Rzeczywisty czas odjazdu ze stacji"\x3EOdj.: \x3Cstrong\x3E' + escapeHTML(actualEntry.actualDep) + '\x3C/strong\x3E\x3C/div\x3E')
+            : '';
+
+        let arrCellHtml = '\x3Cdiv\x3E' + escapeHTML(arrStr) + '\x3C/div\x3E';
         if (stAbs.onlyBoarding) {
             arrCellHtml = '-\x3Cdiv style="font-size: 0.7rem; color: var(--primary); font-weight: 600; line-height: 1.15; margin-top: 2px;"\x3ETylko wsiadanie\x3C/div\x3E';
         }
-        let depCellHtml = escapeHTML(depStr);
+        arrCellHtml += '\x3Cdiv id="actualArrBox_' + idx + '"\x3E' + actualArrHtml + '\x3C/div\x3E';
+
+        let depCellHtml = '\x3Cdiv\x3E' + escapeHTML(depStr) + '\x3C/div\x3E';
         if (stAbs.onlyAlighting) {
             depCellHtml = '-\x3Cdiv style="font-size: 0.7rem; color: var(--warning, #f59e0b); font-weight: 600; line-height: 1.15; margin-top: 2px;"\x3ETylko wysiadanie (~1m)\x3C/div\x3E';
         }
+        depCellHtml += '\x3Cdiv id="actualDepBox_' + idx + '"\x3E' + actualDepHtml + '\x3C/div\x3E';
 
         html += '\x3Ctr class="' + rowClass + '" data-station-idx="' + idx + '"' + absArrAttr + absDepAttr + '\x3E' +
             '\x3Ctd class="station-name-td" data-label="Stacja"\x3E' +
                 '\x3Cdiv class="station-cell-wrapper"\x3E' +
-                    '\x3Cspan class="station-clickable" style="text-decoration:none; cursor:default;"\x3E' + escapeHTML(stacjaNazwa) + '\x3C/span\x3E' +
+                    '\x3Cdiv class="station-name-row-line"\x3E' +
+                        '\x3Cbutton type="button" id="stationCheckBtn_' + idx + '" class="station-stop-check-btn' + (isStopChecked ? ' checked' : '') + '" data-stidx="' + idx + '" onclick="window.toggleStationStopManual(this.dataset.stidx)" title="Odhaczony postój na stacji"\x3E' +
+                            getCheckmarkSvgHtml(isStopChecked) +
+                        '\x3C/button\x3E' +
+                        '\x3Cspan class="station-clickable" style="text-decoration:none; cursor:default;"\x3E' + escapeHTML(stacjaNazwa) + '\x3C/span\x3E' +
+                        '\x3Cspan id="stationStopTag_' + idx + '" class="station-stop-tag" style="display:' + (isStopChecked ? 'inline-flex' : 'none') + ';"\x3E✓ Postój\x3C/span\x3E' +
+                    '\x3C/div\x3E' +
                     dutyRoleBadgeHtml +
                 '\x3C/div\x3E' +
             '\x3C/td\x3E' +
@@ -3060,16 +3310,18 @@ window.locateTrainByGPS = async (silent = false) => {
             }
 
             if (measuredSpeedKmH !== null) {
-                if (window._smoothedSpeedKmH === null || measuredSpeedKmH < 4) {
+                if (window._smoothedSpeedKmH === null || measuredSpeedKmH < 5) {
                     window._smoothedSpeedKmH = measuredSpeedKmH;
                 } else {
                     window._smoothedSpeedKmH = 0.65 * measuredSpeedKmH + 0.35 * window._smoothedSpeedKmH;
                 }
             }
 
-            const displaySpeedKmH = (minDistance <= 0.65 && (measuredSpeedKmH === null || measuredSpeedKmH < 8))
-                ? 0
-                : (window._smoothedSpeedKmH !== null ? window._smoothedSpeedKmH : 0);
+            const currentSpeedKmH = window._smoothedSpeedKmH !== null
+                ? window._smoothedSpeedKmH
+                : (measuredSpeedKmH !== null ? measuredSpeedKmH : 0);
+            const isStoppedAtStation = (minDistance <= 0.30 && currentSpeedKmH < 5);
+            const displaySpeedKmH = isStoppedAtStation ? 0 : currentSpeedKmH;
 
             window.updateSpeedAndGpsIndicator(displaySpeedKmH, isHighConfidenceGps ? 'ok' : 'bts');
 
@@ -3118,8 +3370,8 @@ window.locateTrainByGPS = async (silent = false) => {
                 }
             });
 
-            if (minDistance <= 0.85) {
-                // TRYB STACJA: Pociąg w obrębie stacji (<= 850m) - oznaczamy tę stację (i wcześniejsze) jako zaliczone!
+            if (minDistance <= 0.30) {
+                // TRYB STACJA: Pociąg w odległości <= 300m (0.30 km) od stacji
                 for (let pIdx = 0; pIdx <= closestMatchedPos; pIdx++) {
                     window._passedStationIndices.add(pIdx);
                 }
@@ -3130,6 +3382,25 @@ window.locateTrainByGPS = async (silent = false) => {
                 const closestRow = currentRows[closestRowIndex];
                 const closestObj = rowDistances[closestMatchedPos];
                 const stationName = closestObj ? closestObj.name : '';
+
+                // Jeśli wcześniej staliśmy na innej stacji, domknij jej odjazd
+                if (window._currentStandingStationIdx !== null && window._currentStandingStationIdx !== closestRowIndex) {
+                    window.recordStationDeparture(window._currentStandingStationIdx);
+                    window._currentStandingStationIdx = null;
+                }
+
+                // WARUNEK ZATRZYMANIA NA STACJI: odległość <= 300m ORAZ prędkość < 5 km/h
+                if (currentSpeedKmH < 5) {
+                    window.recordStationArrivalStop(closestRowIndex);
+                    window._currentStandingStationIdx = closestRowIndex;
+                } else if (window._currentStandingStationIdx === closestRowIndex && currentSpeedKmH >= 5) {
+                    // Pociąg po zatrzymaniu ruszył (prędkość >= 5 km/h) -> zapisz HH:MM:SS rzeczywistego odjazdu!
+                    window.recordStationDeparture(closestRowIndex);
+                    window._currentStandingStationIdx = null;
+                }
+
+                const stLog = (window._stationActualLog && window._stationActualLog[closestRowIndex]) ? window._stationActualLog[closestRowIndex] : null;
+                const stopTimeInfo = (stLog && stLog.actualArr) ? (' \u2022 Postój: ' + stLog.actualArr) : '';
 
                 document.querySelectorAll('.train-moving-row').forEach(el => el.remove());
 
@@ -3151,7 +3422,7 @@ window.locateTrainByGPS = async (silent = false) => {
                         badge.innerHTML =
                             '\x3Cspan class="material-symbols-outlined icon-sm" style="animation: train-pulse 1.5s infinite;"\x3Emy_location\x3C/span\x3E ' +
                             (isHighConfidenceGps ? 'Twoja lokalizacja (GPS Satelity): ' : 'Lokalizacja przybliżona (BTS): ') +
-                            'Pociąg w obrębie stacji ' + escapeHTML(stationName) + ' (~' + minDistance.toFixed(1) + ' km)';
+                            'Pociąg na stacji ' + escapeHTML(stationName) + ' (~' + (minDistance * 1000).toFixed(0) + ' m' + escapeHTML(stopTimeInfo) + ')';
                     }
                 } else {
                     if (existingStandingTr) existingStandingTr.remove();
@@ -3164,7 +3435,7 @@ window.locateTrainByGPS = async (silent = false) => {
                                 '\x3Cdiv class="station-standing-badge ' + (isHighConfidenceGps ? 'gps-active' : 'gps-approx') + '"\x3E' +
                                     '\x3Cspan class="material-symbols-outlined icon-sm" style="animation: train-pulse 1.5s infinite;"\x3Emy_location\x3C/span\x3E ' +
                                     (isHighConfidenceGps ? 'Twoja lokalizacja (GPS Satelity): ' : 'Lokalizacja przybliżona (BTS): ') +
-                                    'Pociąg w obrębie stacji ' + escapeHTML(stationName) + ' (~' + minDistance.toFixed(1) + ' km)' +
+                                    'Pociąg na stacji ' + escapeHTML(stationName) + ' (~' + (minDistance * 1000).toFixed(0) + ' m' + escapeHTML(stopTimeInfo) + ')' +
                                 '\x3C/div\x3E' +
                                 '\x3Cdiv class="table-train-container standing-station-container"\x3E' +
                                     (typeof window.getStandingTrainIndicatorHTML === 'function' ? window.getStandingTrainIndicatorHTML(5, stationName) : '') +
@@ -3184,13 +3455,20 @@ window.locateTrainByGPS = async (silent = false) => {
                     window.centerOnElement(closestRow);
                 }
 
-                // SAMOCZYNNE WYŁĄCZENIE CZUWAKA PO WJAZDZIE NA STACJĘ ZMIANY DK!
-                if (typeof window._crewDutyEndIdx === 'number' && closestRowIndex >= window._crewDutyEndIdx && closestRowIndex > window._crewDutyStartIdx) {
-                    window.completeCrewDutyAndStopCzuwak(stationName, 'Wjazd na stację zmiany DK');
+                // SAMOCZYNNE WYŁĄCZENIE CZUWAKA PO ZATRZYMANIU NA STACJI ZMIANY DK (<= 300m i < 5 km/h)!
+                if (currentSpeedKmH < 5 && typeof window._crewDutyEndIdx === 'number' && closestRowIndex >= window._crewDutyEndIdx && closestRowIndex > window._crewDutyStartIdx) {
+                    window.recordStationArrivalStop(closestRowIndex);
+                    window.completeCrewDutyAndStopCzuwak(stationName, 'Zatrzymanie na stacji zmiany DK');
                     return;
                 }
             } else if (rowDistances.length >= 2) {
-                // TRYB SZLAK: Pociąg jedzie pomiędzy stacjami (Kalisz Fix v2 + Filtr Post-Tunelowy)
+                // TRYB SZLAK: Pociąg jedzie pomiędzy stacjami (> 300m od stacji)
+                // Jeśli pociąg właśnie opuścił stację, na której stał -> zapisz automatycznie HH:MM:SS rzeczywistego odjazdu!
+                if (window._currentStandingStationIdx !== null) {
+                    window.recordStationDeparture(window._currentStandingStationIdx);
+                    window._currentStandingStationIdx = null;
+                }
+
                 document.querySelectorAll('.station-standing-train-row').forEach(el => el.remove());
                 document.querySelectorAll('.train-route-table tr.active-station-row').forEach(el => {
                     el.classList.remove('active-station-row', 'station-with-train');
@@ -3294,6 +3572,11 @@ window.locateTrainByGPS = async (silent = false) => {
                 const segStart = rowDistances[bestSegIdx];
                 const segEnd = rowDistances[bestSegIdx + 1];
 
+                // Jeśli pociąg miał zarejestrowany postój (<= 300m i < 5 km/h) na stacji początkowej odcinka i właśnie z niej ruszył, domknij czas odjazdu HH:MM:SS
+                if (window._stationActualLog && window._stationActualLog[segStart.index] && window._stationActualLog[segStart.index].stopped && !window._stationActualLog[segStart.index].actualDep) {
+                    window.recordStationDeparture(segStart.index);
+                }
+
                 // Zabezpieczenie 1: Jeśli pociąg minął już stację zmiany DK (znajduje się na odcinku za stacją zmiany DK) -> wyłącz Czuwaka!
                 if (typeof window._crewDutyEndIdx === 'number' && segStart.index >= window._crewDutyEndIdx && window._passedStationIndices.size > 0) {
                     window.completeCrewDutyAndStopCzuwak(window._crewDutyEndStationName || segStart.name, 'Pociąg minął stację zmiany DK');
@@ -3347,9 +3630,9 @@ window.locateTrainByGPS = async (silent = false) => {
                 const configuredAlertKm = window.getAlertDistanceKm();
                 const approachThresholdKm = Math.min(configuredAlertKm, dAB * 0.65);
 
-                if (isWithinCrewDuty && segEnd.distance <= approachThresholdKm && segEnd.distance > 0.85) {
+                if (isWithinCrewDuty && segEnd.distance <= approachThresholdKm && segEnd.distance > 0.30) {
                     window.triggerStationApproachAlert(segEnd.name, segEnd.distance, false, false);
-                } else if (segEnd.distance <= 0.85) {
+                } else if (segEnd.distance <= 0.30) {
                     window.dismissStationApproachToast();
                 }
 

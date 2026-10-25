@@ -173,6 +173,14 @@
             align-items: center;
             justify-content: center;
             color: #94a3b8;
+            overflow: hidden;
+        }
+        .fab-gps-badge svg {
+            width: 14px;
+            height: 14px;
+            fill: currentColor;
+            display: block;
+            flex-shrink: 0;
         }
         .fab-speed-circle.gps-ok .fab-gps-badge {
             background: #16a34a;
@@ -209,6 +217,89 @@
         }
         tr.outside-duty-row {
             opacity: 0.42;
+        }
+        .collapsed-config-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: var(--input-bg);
+            border: 1.5px solid var(--primary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .collapsed-config-bar:active {
+            transform: scale(0.99);
+        }
+        .station-name-row-line {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+        }
+        .station-stop-check-btn {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 1.5px solid var(--glass-border);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-muted);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            flex-shrink: 0;
+            padding: 0;
+            transition: all 0.2s ease;
+        }
+        .station-stop-check-btn svg {
+            width: 14px;
+            height: 14px;
+            fill: currentColor;
+        }
+        .station-stop-check-btn.checked {
+            background: rgba(34, 197, 94, 0.22);
+            border-color: #22c55e;
+            color: #4ade80;
+            box-shadow: 0 0 8px rgba(34, 197, 94, 0.35);
+        }
+        .station-stop-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 1px 6px;
+            border-radius: 999px;
+            background: rgba(34, 197, 94, 0.16);
+            border: 1px solid rgba(34, 197, 94, 0.55);
+            color: #4ade80;
+            font-size: 0.66rem;
+            font-weight: 800;
+            letter-spacing: 0.2px;
+        }
+        .actual-time-badge {
+            margin-top: 3px;
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            line-height: 1.2;
+            font-variant-numeric: tabular-nums;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            white-space: nowrap;
+        }
+        .actual-time-badge.arr {
+            background: rgba(34, 197, 94, 0.16);
+            border: 1px solid rgba(34, 197, 94, 0.5);
+            color: #4ade80;
+        }
+        .actual-time-badge.dep {
+            background: rgba(56, 189, 248, 0.16);
+            border: 1px solid rgba(56, 189, 248, 0.5);
+            color: #38bdf8;
         }
     </style>
          
@@ -408,101 +499,127 @@
             <div id="partialSyncWarningBanner" style="display: none; margin-top: 10px;"></div>
         </div>
 
-        <div class="controls glass-panel">
-            <div class="toggle-container" style="padding: 6px;">
-                <div id="tabTrain" class="toggle-btn active" onclick="window.switchMode('train')">
-                    <span class="material-symbols-outlined icon-sm">tune</span> Skonfiguruj pociąg
-                </div>
-                <div id="tabRecent" class="toggle-btn" onclick="window.switchMode('recent')">
-                    <span class="material-symbols-outlined icon-sm">history</span> Ostatnie (5)
-                </div>
-            </div>
-                         
-            <div id="searchTrainBox">
-                <!-- KROK 1: DATA WYJAZDU POCIĄGU ZE STACJI POCZĄTKOWEJ -->
-                <div style="background: var(--input-bg); border: 1px solid var(--glass-border); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px;">
-                    <label for="trainDepartureDateInput" style="display: flex; align-items: center; gap: 6px; font-size: 0.84rem; font-weight: 700; color: var(--text); margin-bottom: 8px;">
-                        <span class="material-symbols-outlined icon-sm" style="color: var(--primary);">calendar_month</span>
-                        1. Data wyjazdu pociągu ze stacji początkowej:
-                    </label>
-                    <div style="display: flex; gap: 6px; margin-bottom: 8px;">
-                        <button type="button" id="btnDateYesterday" class="date-quick-btn" onclick="window.setRelativeTrainDate(-1)">Wczoraj</button>
-                        <button type="button" id="btnDateToday" class="date-quick-btn active" onclick="window.setRelativeTrainDate(0)">Dzisiaj</button>
-                        <button type="button" id="btnDateTomorrow" class="date-quick-btn" onclick="window.setRelativeTrainDate(1)">Jutro</button>
+        <div class="controls glass-panel" id="trainConfigControlsPanel">
+            <!-- ZWINIĘTY PASEK KONFIGURACJI (PO SKONFIGUROWANIU POCIĄGU) -->
+            <div id="collapsedTrainConfigBar" class="collapsed-config-bar" style="display: none;" onclick="window.toggleTrainConfigPanel(true)">
+                <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
+                    <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(2, 132, 199, 0.2); border: 1px solid var(--primary); display: flex; align-items: center; justify-content: center; color: var(--primary); flex-shrink: 0;">
+                        <span class="material-symbols-outlined">train</span>
                     </div>
-                    <input type="date" id="trainDepartureDateInput" onchange="window.onTrainDateChange(this.value)" style="width: 100%; margin-bottom: 0; padding: 8px 10px; font-weight: 700; font-size: 0.92rem;">
-                </div>
-
-                <!-- KROK 2: NUMER LUB NAZWA POCIĄGU -->
-                <div class="toggle-container" style="background: var(--input-bg); padding: 4px; margin-bottom: 10px;">
-                    <div id="subTabTrainNumber" class="toggle-btn active" onclick="window.switchTrainMode('number')" style="padding: 8px; font-size: 0.85rem;">
-                        <span class="material-symbols-outlined icon-sm">tag</span> 2. Po numerze
-                    </div>
-                    <div id="subTabTrainName" class="toggle-btn" onclick="window.switchTrainMode('name')" style="padding: 8px; font-size: 0.85rem;">
-                        <span class="material-symbols-outlined icon-sm">abc</span> 2. Po nazwie
-                    </div>
-                </div>
-                                 
-                <div id="trainSyncStatusBanner" style="display:none; margin-bottom: 12px;"></div>
-
-                <div id="trainNumberContainer">
-                    <label for="trainInput" style="display:block; margin-bottom:5px; font-weight:600;">Wpisz numer pociągu:</label>
-                    <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 5px;">
-                        <input type="text" inputmode="numeric" id="trainInput" list="trainsDictionary" placeholder="np. 13100 lub 3520..." oninput="window.triggerSearch()" style="flex: 1; margin-bottom: 0;">
-                        <button onclick="window.clearSearch('trainInput')" aria-label="Wyczyść" style="background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px; color: var(--text-muted); width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;">
-                            <span class="material-symbols-outlined icon-sm">close</span>
-                        </button>
-                    </div>
-                    <datalist id="trainsDictionary"></datalist>
-                </div>
-                                 
-                <div id="trainNameContainer" style="display:none;">
-                    <label for="trainNameInput" style="display:block; margin-bottom:5px; font-weight:600;">Wpisz lub wybierz nazwę pociągu:</label>
-                    <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 5px;">
-                        <input type="text" id="trainNameInput" list="trainNamesDictionary" placeholder="Zacznij wpisywać nazwę..." oninput="window.triggerSearch()" style="flex: 1; margin-bottom: 0;">
-                        <button onclick="window.clearSearch('trainNameInput')" aria-label="Wyczyść" style="background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px; color: var(--text-muted); width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;">
-                            <span class="material-symbols-outlined icon-sm">close</span>
-                        </button>
-                    </div>
-                    <datalist id="trainNamesDictionary"></datalist>
-                </div>
-
-                <!-- KROK 3: ODCINEK OBSŁUGI DK (STACJA OBJĘCIA -> STACJA ZMIANY DK / AUTO-WYŁĄCZENIE) -->
-                <div id="crewDutyConfigBox" class="duty-config-box" style="display: none;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px;">
-                        <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 800; color: var(--primary);">
-                            <span class="material-symbols-outlined icon-sm">badge</span>
-                            3. Odcinek obsługi DK (auto-wyłączenie po zmianie):
-                        </span>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
-                        <div>
-                            <label for="dutyStartStationSelect" style="font-size: 0.76rem; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
-                                <span class="material-symbols-outlined" style="font-size: 0.95rem; color: #22c55e;">login</span>
-                                Stacja objęcia (wsiadam):
-                            </label>
-                            <select id="dutyStartStationSelect" class="duty-select" onchange="window.onCrewDutySegmentChange()"></select>
+                    <div style="min-width: 0; flex: 1;">
+                        <div id="collapsedConfigTrainTitle" style="font-weight: 800; font-size: 0.94rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            Skonfigurowany pociąg
                         </div>
-                        <div>
-                            <label for="dutyEndStationSelect" style="font-size: 0.76rem; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
-                                <span class="material-symbols-outlined" style="font-size: 0.95rem; color: #f59e0b;">logout</span>
-                                Stacja zmiany DK / zdania (wysiadam – wyłączy Czuwaka):
-                            </label>
-                            <select id="dutyEndStationSelect" class="duty-select" onchange="window.onCrewDutySegmentChange()"></select>
+                        <div id="collapsedConfigDutySub" style="font-size: 0.76rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px;">
+                            Odcinek DK
                         </div>
                     </div>
                 </div>
+                <button type="button" style="padding: 6px 11px; border-radius: 8px; border: 1px solid var(--primary); background: rgba(2, 132, 199, 0.14); color: var(--primary); font-weight: 800; font-size: 0.78rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; min-height: 38px;">
+                    <span class="material-symbols-outlined" style="font-size: 1rem;">tune</span> Zmień
+                </button>
             </div>
 
-            <!-- SEKCJA OSTATNIO UŻYWANE POCIĄGI -->
-            <div id="searchRecentBox" style="display:none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 4px;">
-                    <span id="recentSectionTitle" style="font-size: 0.82rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">5 ostatnich pociągów</span>
-                    <button type="button" onclick="window.clearRecentHistory()" style="background: transparent; border: none; color: var(--text-muted); font-size: 0.8rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 4px 6px;">
-                        <span class="material-symbols-outlined" style="font-size: 1.1rem;">delete_sweep</span> Wyczyść
-                    </button>
+            <!-- ROZWINIĘTY FORMULARZ KONFIGURACJI POCIĄGU -->
+            <div id="trainConfigCollapsibleBody">
+                <div class="toggle-container" style="padding: 6px;">
+                    <div id="tabTrain" class="toggle-btn active" onclick="window.switchMode('train')">
+                        <span class="material-symbols-outlined icon-sm">tune</span> Skonfiguruj pociąg
+                    </div>
+                    <div id="tabRecent" class="toggle-btn" onclick="window.switchMode('recent')">
+                        <span class="material-symbols-outlined icon-sm">history</span> Ostatnie (5)
+                    </div>
                 </div>
-                <div id="recentTrainsContainer"></div>
+                             
+                <div id="searchTrainBox">
+                    <!-- KROK 1: DATA WYJAZDU POCIĄGU ZE STACJI POCZĄTKOWEJ -->
+                    <div style="background: var(--input-bg); border: 1px solid var(--glass-border); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px;">
+                        <label for="trainDepartureDateInput" style="display: flex; align-items: center; gap: 6px; font-size: 0.84rem; font-weight: 700; color: var(--text); margin-bottom: 8px;">
+                            <span class="material-symbols-outlined icon-sm" style="color: var(--primary);">calendar_month</span>
+                            1. Data wyjazdu pociągu ze stacji początkowej:
+                        </label>
+                        <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+                            <button type="button" id="btnDateYesterday" class="date-quick-btn" onclick="window.setRelativeTrainDate(-1)">Wczoraj</button>
+                            <button type="button" id="btnDateToday" class="date-quick-btn active" onclick="window.setRelativeTrainDate(0)">Dzisiaj</button>
+                            <button type="button" id="btnDateTomorrow" class="date-quick-btn" onclick="window.setRelativeTrainDate(1)">Jutro</button>
+                        </div>
+                        <input type="date" id="trainDepartureDateInput" onchange="window.onTrainDateChange(this.value)" style="width: 100%; margin-bottom: 0; padding: 8px 10px; font-weight: 700; font-size: 0.92rem;">
+                    </div>
+
+                    <!-- KROK 2: NUMER LUB NAZWA POCIĄGU -->
+                    <div class="toggle-container" style="background: var(--input-bg); padding: 4px; margin-bottom: 10px;">
+                        <div id="subTabTrainNumber" class="toggle-btn active" onclick="window.switchTrainMode('number')" style="padding: 8px; font-size: 0.85rem;">
+                            <span class="material-symbols-outlined icon-sm">tag</span> 2. Po numerze
+                        </div>
+                        <div id="subTabTrainName" class="toggle-btn" onclick="window.switchTrainMode('name')" style="padding: 8px; font-size: 0.85rem;">
+                            <span class="material-symbols-outlined icon-sm">abc</span> 2. Po nazwie
+                        </div>
+                    </div>
+                                     
+                    <div id="trainSyncStatusBanner" style="display:none; margin-bottom: 12px;"></div>
+
+                    <div id="trainNumberContainer">
+                        <label for="trainInput" style="display:block; margin-bottom:5px; font-weight:600;">Wpisz numer pociągu:</label>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 5px;">
+                            <input type="text" inputmode="numeric" id="trainInput" list="trainsDictionary" placeholder="np. 13100 lub 3520..." oninput="window.triggerSearch()" style="flex: 1; margin-bottom: 0;">
+                            <button onclick="window.clearSearch('trainInput')" aria-label="Wyczyść" style="background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px; color: var(--text-muted); width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;">
+                                <span class="material-symbols-outlined icon-sm">close</span>
+                            </button>
+                        </div>
+                        <datalist id="trainsDictionary"></datalist>
+                    </div>
+                                     
+                    <div id="trainNameContainer" style="display:none;">
+                        <label for="trainNameInput" style="display:block; margin-bottom:5px; font-weight:600;">Wpisz lub wybierz nazwę pociągu:</label>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 5px;">
+                            <input type="text" id="trainNameInput" list="trainNamesDictionary" placeholder="Zacznij wpisywać nazwę..." oninput="window.triggerSearch()" style="flex: 1; margin-bottom: 0;">
+                            <button onclick="window.clearSearch('trainNameInput')" aria-label="Wyczyść" style="background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px; color: var(--text-muted); width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;">
+                                <span class="material-symbols-outlined icon-sm">close</span>
+                            </button>
+                        </div>
+                        <datalist id="trainNamesDictionary"></datalist>
+                    </div>
+
+                    <!-- KROK 3: ODCINEK OBSŁUGI DK (STACJA OBJĘCIA -> STACJA ZMIANY DK / AUTO-WYŁĄCZENIE) -->
+                    <div id="crewDutyConfigBox" class="duty-config-box" style="display: none;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px;">
+                            <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 800; color: var(--primary);">
+                                <span class="material-symbols-outlined icon-sm">badge</span>
+                                3. Odcinek obsługi DK (auto-wyłączenie po zmianie):
+                            </span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
+                            <div>
+                                <label for="dutyStartStationSelect" style="font-size: 0.76rem; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                                    <span class="material-symbols-outlined" style="font-size: 0.95rem; color: #22c55e;">login</span>
+                                    Stacja objęcia (wsiadam):
+                                </label>
+                                <select id="dutyStartStationSelect" class="duty-select" onchange="window.onCrewDutySegmentChange(false)"></select>
+                            </div>
+                            <div>
+                                <label for="dutyEndStationSelect" style="font-size: 0.76rem; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                                    <span class="material-symbols-outlined" style="font-size: 0.95rem; color: #f59e0b;">logout</span>
+                                    Stacja zmiany DK / zdania (wysiadam – wyłączy Czuwaka):
+                                </label>
+                                <select id="dutyEndStationSelect" class="duty-select" onchange="window.onCrewDutySegmentChange(true)"></select>
+                            </div>
+                        </div>
+                        <button type="button" onclick="window.collapseTrainConfigPanel()" style="width: 100%; margin-top: 10px; padding: 10px 14px; border-radius: 8px; border: 1px solid #22c55e; background: rgba(34, 197, 94, 0.18); color: #4ade80; font-weight: 800; font-size: 0.86rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px;">
+                            <span class="material-symbols-outlined icon-sm">expand_less</span> Gotowe – zwiń konfigurację
+                        </button>
+                    </div>
+                </div>
+
+                <!-- SEKCJA OSTATNIO UŻYWANE POCIĄGI -->
+                <div id="searchRecentBox" style="display:none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 4px;">
+                        <span id="recentSectionTitle" style="font-size: 0.82rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">5 ostatnich pociągów</span>
+                        <button type="button" onclick="window.clearRecentHistory()" style="background: transparent; border: none; color: var(--text-muted); font-size: 0.8rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 4px 6px;">
+                            <span class="material-symbols-outlined" style="font-size: 1.1rem;">delete_sweep</span> Wyczyść
+                        </button>
+                    </div>
+                    <div id="recentTrainsContainer"></div>
+                </div>
             </div>
         </div>
 
@@ -548,7 +665,7 @@
         </button>
         <div id="fabSpeedGpsCircle" class="fab-speed-circle gps-off" onclick="window.centerOnActiveTrainPosition()" title="Aktualna prędkość pociągu i status sygnału GPS">
             <div id="fabGpsStatusBadge" class="fab-gps-badge">
-                <span class="material-symbols-outlined" id="fabGpsStatusIcon" style="font-size: 0.92rem;">gps_searching</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
             </div>
             <span id="fabSpeedValue" class="fab-speed-val">--</span>
             <span id="fabSpeedUnit" class="fab-speed-unit">km/h</span>
