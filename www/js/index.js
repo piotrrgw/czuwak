@@ -654,7 +654,10 @@ window.completeCrewDutyAndStopCzuwak = (stationName, reasonText = '') => {
                     '\x3Cspan\x3EZakończono obsługę DK na stacji \x3Cstrong style="color:#fff;"\x3E' + escapeHTML(stationName || window._crewDutyEndStationName || '') + '\x3C/strong\x3E – Czuwak wyłączył się samoczynnie' +
                     (reasonText ? (' (' + escapeHTML(reasonText) + ')') : '') + '.\x3C/span\x3E' +
                 '\x3C/div\x3E' +
-                '\x3Cbutton type="button" onclick="window.resumeCrewDutyCzuwak()" style="padding:6px 12px; border-radius:8px; border:1px solid var(--primary); background:var(--input-bg); color:var(--primary); font-weight:800; font-size:0.78rem; cursor:pointer;"\x3EWznów Czuwak\x3C/button\x3E' +
+                '\x3Cdiv style="display:flex; align-items:center; gap:6px;"\x3E' +
+                    '\x3Cbutton type="button" onclick="window.resumeCrewDutyCzuwak()" style="padding:6px 12px; border-radius:8px; border:1px solid var(--primary); background:var(--input-bg); color:var(--primary); font-weight:800; font-size:0.78rem; cursor:pointer;"\x3EWznów Czuwak\x3C/button\x3E' +
+                    '\x3Cbutton type="button" onclick="window.closeActiveTrainAndSleep()" style="padding:6px 12px; border-radius:8px; border:1px solid rgba(239, 68, 68, 0.5); background:rgba(239, 68, 68, 0.15); color:#f87171; font-weight:800; font-size:0.78rem; cursor:pointer; display:inline-flex; align-items:center; gap:4px;" title="Zamknij obsługiwany pociąg i uśpij aplikację Czuwak"\x3E\x3Cspan class="material-symbols-outlined" style="font-size:0.95rem;"\x3Epower_settings_new\x3C/span\x3E Zamknij\x3C/button\x3E' +
+                '\x3C/div\x3E' +
             '\x3C/div\x3E';
     }
 
@@ -2057,32 +2060,7 @@ window.switchTrainMode = (mode) => {
 };
 
 window.submitTrainConfiguration = () => {
-    try {
-        if (document.activeElement && typeof document.activeElement.blur === 'function') {
-            document.activeElement.blur();
-        }
-    } catch (e) {}
-
-    const trInput = document.getElementById('trainInput');
-    const nameInput = document.getElementById('trainNameInput');
-    const numVal = trInput ? trInput.value.trim() : '';
-    const nameVal = nameInput ? nameInput.value.trim() : '';
-
-    if (currentTrainMode === 'number') {
-        if (!numVal) {
-            alert('Wpisz numer pociągu (np. 13100), a następnie kliknij "Zatwierdź konfigurację pociągu".');
-            if (trInput) trInput.focus();
-            return;
-        }
-    } else {
-        if (!nameVal) {
-            alert('Wpisz nazwę pociągu (np. MALINOWSKI), a następnie kliknij "Zatwierdź konfigurację pociągu".');
-            if (nameInput) nameInput.focus();
-            return;
-        }
-    }
-
-    window.triggerSearch();
+    window.findTrainForConfiguration();
 };
 
 window.addRecentTrain = (trainObj) => {
@@ -2161,7 +2139,7 @@ window.renderRecentView = () => {
 
 window.selectTrainByNumber = (numerPociagu) => {
     window.stopTrainTracking();
-    window._configPanelForceExpanded = false;
+    window._configPanelForceExpanded = true;
     window.switchMode('train');
     window.switchTrainMode('number');
     const trIn = document.getElementById('trainInput');
@@ -2172,7 +2150,7 @@ window.selectTrainByNumber = (numerPociagu) => {
     window.lastSearchedTrainNum = numerPociagu;
     window.forceExactTrainMatch = true;
 
-    window.submitTrainConfiguration();
+    window.findTrainForConfiguration();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
@@ -2182,6 +2160,8 @@ window.clearSearch = (inputId) => {
 
     window.stopTrainTracking();
     window._currentTrainObject = null;
+    window._pendingTrain = null;
+    window._pendingTrainBestMatch = null;
     window.forceExactTrainMatch = false;
     window.expandTrainConfigPanel();
 
@@ -2204,8 +2184,11 @@ window.clearSearch = (inputId) => {
 
     window.lastSearchedTrainNum = '';
     window.lastSearchedTrainName = '';
+    localStorage.removeItem('CZUWAK_CONFIRMED_TRAIN_NUM');
     localStorage.removeItem('CZUWAK_LAST_TRAIN_NUM');
     localStorage.removeItem('CZUWAK_LAST_TRAIN_NAME');
+
+    window.renderSleepState();
 };
 
 let searchTimeout = null;
@@ -2218,9 +2201,6 @@ window.triggerSearch = () => {
         window.lastSearchedTrainName = currentTrainName;
         window.stopTrainTracking();
     }
-
-    localStorage.setItem('CZUWAK_LAST_TRAIN_NUM', currentTrainInput);
-    localStorage.setItem('CZUWAK_LAST_TRAIN_NAME', currentTrainName);
 
     if (searchTimeout) clearTimeout(searchTimeout);
     document.getElementById('mainStatusBox').style.display = 'none';
@@ -2239,12 +2219,89 @@ window.triggerSearch = () => {
     }, 250);
 };
 
+window.closeActiveTrainAndSleep = () => {
+    if (!confirm('Czy na pewno chcesz zamkn\u0105\u0107 obs\u0142ugiwany poci\u0105g i u\u015bpi\u0107 aplikacj\u0119 Czuwak?')) {
+        return;
+    }
+
+    window.stopTrainTracking();
+    window.stopAlarmLoop();
+
+    window._currentTrainObject = null;
+    window._pendingTrain = null;
+    window._pendingTrainBestMatch = null;
+    window._currentActiveTrainNumber = null;
+    window._lastTrainGpsFix = null;
+    window._crewDutyCompleted = false;
+    window._stationActualLog = {};
+
+    try {
+        localStorage.removeItem('CZUWAK_CONFIRMED_TRAIN_NUM');
+        localStorage.removeItem('CZUWAK_LAST_TRAIN_NUM');
+        localStorage.removeItem('CZUWAK_LAST_TRAIN_NAME');
+    } catch (e) {}
+
+    const trIn = document.getElementById('trainInput');
+    const nameIn = document.getElementById('trainNameInput');
+    if (trIn) trIn.value = '';
+    if (nameIn) nameIn.value = '';
+
+    const ormSec = document.getElementById('openRailwayMapSection');
+    if (ormSec) ormSec.style.display = 'none';
+
+    const fabContainer = document.getElementById('trainFabContainer');
+    if (fabContainer) fabContainer.style.display = 'none';
+
+    const dutyBox = document.getElementById('crewDutyConfigBox');
+    if (dutyBox) dutyBox.style.display = 'none';
+
+    const mainBox = document.getElementById('mainStatusBox');
+    if (mainBox) mainBox.style.display = 'none';
+
+    window.expandTrainConfigPanel();
+    window.updateSpeedAndGpsIndicator(0, 'idle', 'U\u015bpiony');
+    window.renderSleepState();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.renderSleepState = () => {
+    window.stopTrainTracking();
+    window._currentTrainObject = null;
+    window._pendingTrain = null;
+    window.expandTrainConfigPanel();
+
+    const dutyBox = document.getElementById('crewDutyConfigBox');
+    if (dutyBox) dutyBox.style.display = 'none';
+    const ormSec = document.getElementById('openRailwayMapSection');
+    if (ormSec) ormSec.style.display = 'none';
+    const fabContainer = document.getElementById('trainFabContainer');
+    if (fabContainer) fabContainer.style.display = 'none';
+    const mainBox = document.getElementById('mainStatusBox');
+    if (mainBox) mainBox.style.display = 'none';
+
+    const listContainer = document.getElementById('detailsList');
+    if (listContainer) {
+        listContainer.innerHTML =
+            '\x3Cdiv class="card glass-panel" style="text-align: center; padding: 26px 16px; margin: 12px 0;"\x3E' +
+                '\x3Cspan class="material-symbols-outlined" style="font-size: 3rem; color: #38bdf8; opacity: 0.85; margin-bottom: 8px;"\x3Epower_settings_new\x3C/span\x3E' +
+                '\x3Cdiv style="font-size: 1.15rem; font-weight: 800; color: var(--text); margin-bottom: 6px;"\x3EAplikacja Czuwak jest u\u015bpiona\x3C/div\x3E' +
+                '\x3Cdiv style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.45; max-width: 320px; margin: 0 auto 14px auto;"\x3E' +
+                    'Czuwak nie zu\u017cywa baterii ani GPS. Wprowad\u017a numer poci\u0105gu i kliknij \u201EZa\u0142aduj stacje poci\u0105gu\u201D, aby skonfigurowa\u0107 odcinek obs\u0142ugi DK.' +
+                '\x3C/div\x3E' +
+            '\x3C/div\x3E';
+        listContainer.style.display = 'block';
+    }
+};
+
 window.restoreLastState = () => {
+    const confirmedTrainNum = localStorage.getItem('CZUWAK_CONFIRMED_TRAIN_NUM') || '';
     const lastTrNum = localStorage.getItem('CZUWAK_LAST_TRAIN_NUM') || '';
     const lastTrName = localStorage.getItem('CZUWAK_LAST_TRAIN_NAME') || '';
 
-    document.getElementById('trainInput').value = lastTrNum;
-    document.getElementById('trainNameInput').value = lastTrName;
+    const trInput = document.getElementById('trainInput');
+    const nameInput = document.getElementById('trainNameInput');
+    if (trInput) trInput.value = lastTrNum;
+    if (nameInput) nameInput.value = lastTrName;
 
     window.syncTrainDateButtonsUI();
 
@@ -2253,6 +2310,13 @@ window.restoreLastState = () => {
 
     window.switchTrainMode(lastTrMode);
     window.switchMode(lastMode);
+
+    if (confirmedTrainNum && (lastTrNum || lastTrName)) {
+        window.forceExactTrainMatch = true;
+        window.findTrainForConfiguration(true);
+    } else {
+        window.renderSleepState();
+    }
 };
 
 window.hardReinstall = async () => {
@@ -2655,35 +2719,55 @@ window.toggleStationStopManual = (idxStr) => {
 };
 
 // ==========================================
-// RENDEROWANIE WIDOKU TRASY POCIĄGU (STACJA | PRZYJAZD | ODJAZD)
+// WYSZUKIWANIE POCIĄGU DO KONFIGURACJI (KROK 2 -> KROK 3)
 // ==========================================
-function wyswietlWidok() {
+window._pendingTrain = null;
+window._pendingTrainBestMatch = null;
+
+window.findTrainForConfiguration = (autoConfirm = false) => {
+    try {
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+        }
+    } catch (e) {}
+
+    const trInput = document.getElementById('trainInput');
+    const nameInput = document.getElementById('trainNameInput');
+    const numVal = trInput ? trInput.value.trim() : '';
+    const nameVal = nameInput ? nameInput.value.trim() : '';
     const listContainer = document.getElementById('detailsList');
     const mainBox = document.getElementById('mainStatusBox');
     const ormSec = document.getElementById('openRailwayMapSection');
-    listContainer.innerHTML = '';
+    const dutyBox = document.getElementById('crewDutyConfigBox');
+    const fabContainer = document.getElementById('trainFabContainer');
 
-    if (currentMode !== 'train') return;
+    if (currentTrainMode === 'number') {
+        if (!numVal) {
+            alert('Wpisz numer pociągu (np. 13100), a następnie kliknij \u201EZaładuj stacje pociągu\u201D.');
+            if (trInput) trInput.focus();
+            return;
+        }
+    } else {
+        if (!nameVal) {
+            alert('Wpisz nazwę pociągu (np. MALINOWSKI), a następnie kliknij \u201EZaładuj stacje pociągu\u201D.');
+            if (nameInput) nameInput.focus();
+            return;
+        }
+    }
+
+    if (!bazaPociagow || bazaPociagow.length === 0) {
+        if (listContainer) {
+            listContainer.innerHTML = '\x3Cdiv style="text-align:center; padding:20px; color:var(--text-muted);"\x3EBaza pociągów nie została jeszcze wczytana. Odczekaj chwilę...\x3C/div\x3E';
+            listContainer.style.display = 'block';
+        }
+        return;
+    }
 
     let pociagi = [];
     if (currentTrainMode === 'number') {
-        const nrPociaguRaw = String(document.getElementById('trainInput').value || '').trim();
-        const nrPociagu = nrPociaguRaw.includes(' | ') ? nrPociaguRaw.split(' | ')[0].trim() : nrPociaguRaw;
-
-        if (!nrPociagu || nrPociagu.length < 2) {
-            window.stopTrainTracking();
-            window._currentTrainObject = null;
-            window.expandTrainConfigPanel();
-            if (ormSec) ormSec.style.display = 'none';
-            const dutyBox = document.getElementById('crewDutyConfigBox');
-            if (dutyBox) dutyBox.style.display = 'none';
-            const fabContainer = document.getElementById('trainFabContainer');
-            if (fabContainer) fabContainer.style.display = 'none';
-            return;
-        }
-
+        const nrPociagu = numVal.includes(' | ') ? numVal.split(' | ')[0].trim() : numVal;
         if (window.forceExactTrainMatch) {
-            pociagi = (bazaPociagow || []).filter(p => String(p.numer) === nrPociagu);
+            pociagi = bazaPociagow.filter(p => String(p.numer) === nrPociagu);
         } else {
             const lastChar = nrPociagu.slice(-1);
             let altNumer = nrPociagu;
@@ -2692,51 +2776,43 @@ function wyswietlWidok() {
                 const altDigit = lastDigit % 2 === 0 ? lastDigit + 1 : lastDigit - 1;
                 altNumer = nrPociagu.slice(0, -1) + altDigit;
             }
-            pociagi = (bazaPociagow || []).filter(p => String(p.numer) === nrPociagu || String(p.numer) === altNumer);
+            pociagi = bazaPociagow.filter(p => String(p.numer) === nrPociagu || String(p.numer) === altNumer);
         }
 
         if (pociagi.length === 0) {
             window.stopTrainTracking();
             window._currentTrainObject = null;
+            window._pendingTrain = null;
             window.expandTrainConfigPanel();
-            if (ormSec) ormSec.style.display = 'none';
-            const dutyBox = document.getElementById('crewDutyConfigBox');
             if (dutyBox) dutyBox.style.display = 'none';
-            const fabContainer = document.getElementById('trainFabContainer');
+            if (ormSec) ormSec.style.display = 'none';
             if (fabContainer) fabContainer.style.display = 'none';
-            listContainer.innerHTML = '\x3Cp style="text-align:center; color:var(--text-muted); padding: 20px;"\x3EBrak pociągu o numerze ' + escapeHTML(nrPociagu) + ' w bazie.\x3C/p\x3E';
-            listContainer.style.display = 'block';
+            if (mainBox) mainBox.style.display = 'none';
+            if (listContainer) {
+                listContainer.innerHTML = '\x3Cp style="text-align:center; color:var(--text-muted); padding:20px;"\x3EBrak pociągu o numerze ' + escapeHTML(nrPociagu) + ' w bazie.\x3C/p\x3E';
+                listContainer.style.display = 'block';
+            }
             return;
         }
     } else {
-        const nazwaPociagu = String(document.getElementById('trainNameInput').value || '').trim();
-        if (!nazwaPociagu || nazwaPociagu.length < 3) {
-            window.stopTrainTracking();
-            window._currentTrainObject = null;
-            window.expandTrainConfigPanel();
-            if (ormSec) ormSec.style.display = 'none';
-            const dutyBox = document.getElementById('crewDutyConfigBox');
-            if (dutyBox) dutyBox.style.display = 'none';
-            const fabContainer = document.getElementById('trainFabContainer');
-            if (fabContainer) fabContainer.style.display = 'none';
-            return;
-        }
-
-        pociagi = (bazaPociagow || []).filter(p => p.nazwa && String(p.nazwa).toUpperCase() === nazwaPociagu.toUpperCase());
+        const nazwaPociagu = nameVal;
+        pociagi = bazaPociagow.filter(p => p.nazwa && String(p.nazwa).toUpperCase() === nazwaPociagu.toUpperCase());
         if (pociagi.length === 0) {
-            pociagi = (bazaPociagow || []).filter(p => p.nazwa && String(p.nazwa).toUpperCase().includes(nazwaPociagu.toUpperCase()));
+            pociagi = bazaPociagow.filter(p => p.nazwa && String(p.nazwa).toUpperCase().includes(nazwaPociagu.toUpperCase()));
         }
         if (pociagi.length === 0) {
             window.stopTrainTracking();
             window._currentTrainObject = null;
+            window._pendingTrain = null;
             window.expandTrainConfigPanel();
-            if (ormSec) ormSec.style.display = 'none';
-            const dutyBox = document.getElementById('crewDutyConfigBox');
             if (dutyBox) dutyBox.style.display = 'none';
-            const fabContainer = document.getElementById('trainFabContainer');
+            if (ormSec) ormSec.style.display = 'none';
             if (fabContainer) fabContainer.style.display = 'none';
-            listContainer.innerHTML = '\x3Cp style="text-align:center; color:var(--text-muted); padding: 20px;"\x3EBrak pociągu o nazwie "' + escapeHTML(nazwaPociagu) + '" w bazie.\x3C/p\x3E';
-            listContainer.style.display = 'block';
+            if (mainBox) mainBox.style.display = 'none';
+            if (listContainer) {
+                listContainer.innerHTML = '\x3Cp style="text-align:center; color:var(--text-muted); padding:20px;"\x3EBrak pociągu o nazwie \x22' + escapeHTML(nazwaPociagu) + '\x22 w bazie.\x3C/p\x3E';
+                listContainer.style.display = 'block';
+            }
             return;
         }
     }
@@ -2748,17 +2824,20 @@ function wyswietlWidok() {
         const scoredTrains = pociagi.map(p => ({ pociag: p, ...scoreTrainVariantForSelectedDate(p, now) }));
         scoredTrains.sort((a, b) => a.score - b.score);
         const bestMatch = scoredTrains[0];
-        generujWidokTrasy(bestMatch.pociag, listContainer, mainBox, bestMatch);
+        window.setupCrewDutyStationsForTrain(bestMatch.pociag, bestMatch, autoConfirm);
     } else {
         window.stopTrainTracking();
         window._currentTrainObject = null;
+        window._pendingTrain = null;
         window.expandTrainConfigPanel();
+        if (dutyBox) dutyBox.style.display = 'none';
         if (ormSec) ormSec.style.display = 'none';
-        const fabContainer = document.getElementById('trainFabContainer');
         if (fabContainer) fabContainer.style.display = 'none';
-        mainBox.style.display = 'block';
-        mainBox.className = 'bg-secondary';
-        mainBox.innerText = 'WYBIERZ KIERUNEK (' + uniqueNumbers.length + ')';
+        if (mainBox) {
+            mainBox.style.display = 'block';
+            mainBox.className = 'bg-secondary';
+            mainBox.innerText = 'WYBIERZ KIERUNEK (' + uniqueNumbers.length + ')';
+        }
 
         let wariantyHtml = '\x3Ch3 style="color:var(--primary); margin:10px 0; font-size:1rem; text-align:center;"\x3EWybierz relację (kierunek):\x3C/h3\x3E';
         uniqueNumbers.forEach(num => {
@@ -2794,11 +2873,183 @@ function wyswietlWidok() {
                     '\x3C/div\x3E' +
                 '\x3C/div\x3E';
         });
-        listContainer.innerHTML = wariantyHtml;
-        listContainer.style.display = 'block';
-        const dutyBox = document.getElementById('crewDutyConfigBox');
-        if (dutyBox) dutyBox.style.display = 'none';
+        if (listContainer) {
+            listContainer.innerHTML = wariantyHtml;
+            listContainer.style.display = 'block';
+        }
     }
+};
+
+window.setupCrewDutyStationsForTrain = (pociag, bestMatch, autoConfirm = false) => {
+    if (!pociag) return;
+    window._pendingTrain = pociag;
+    window._pendingTrainBestMatch = bestMatch;
+
+    const stacjeArray = Array.isArray(pociag.stacje) ? pociag.stacje : Object.values(pociag.stacje || {});
+    const totalStations = stacjeArray.length;
+    if (totalStations < 2) {
+        alert('Ten pociąg nie posiada listy stacji.');
+        return;
+    }
+
+    const cleanTrainNum = String(pociag.numer || '').trim();
+    let savedStartIdx = 0;
+    let savedEndIdx = Math.max(1, totalStations - 1);
+
+    if (cleanTrainNum) {
+        try {
+            const rawSaved = localStorage.getItem('CZUWAK_DUTY_SEG_' + cleanTrainNum);
+            if (rawSaved) {
+                const parsed = JSON.parse(rawSaved);
+                if (typeof parsed.startIdx === 'number' && typeof parsed.endIdx === 'number') {
+                    savedStartIdx = Math.max(0, Math.min(totalStations - 2, parsed.startIdx));
+                    savedEndIdx = Math.max(savedStartIdx + 1, Math.min(totalStations - 1, parsed.endIdx));
+                }
+            }
+        } catch (e) {}
+    }
+
+    window._crewDutyStartIdx = savedStartIdx;
+    window._crewDutyEndIdx = savedEndIdx;
+
+    const stationNamesUpper = stacjeArray.map(stObj => {
+        const raw = typeof stObj === 'string' ? stObj : (stObj && stObj.nazwa ? stObj.nazwa : '');
+        return String(raw).toUpperCase().trim();
+    });
+
+    const dutyBox = document.getElementById('crewDutyConfigBox');
+    const startSel = document.getElementById('dutyStartStationSelect');
+    const endSel = document.getElementById('dutyEndStationSelect');
+    if (dutyBox && startSel && endSel) {
+        let startOptsHtml = '';
+        let endOptsHtml = '';
+        stacjeArray.forEach((stObj, idx) => {
+            const stName = stationNamesUpper[idx] || ('Stacja ' + (idx + 1));
+            const depStr = (typeof stObj === 'object' && stObj && stObj.odjazd && stObj.odjazd !== '-') ? (' (odj. ' + stObj.odjazd + ')') : '';
+            const arrStr = (typeof stObj === 'object' && stObj && stObj.przyjazd && stObj.przyjazd !== '-') ? (' (przyj. ' + stObj.przyjazd + ')') : '';
+            if (idx < totalStations - 1) {
+                startOptsHtml += '\x3Coption value="' + idx + '"' + (idx === savedStartIdx ? ' selected' : '') + '\x3E' +
+                    (idx + 1) + '. ' + escapeHTML(stName + depStr) + '\x3C/option\x3E';
+            }
+            if (idx > 0) {
+                endOptsHtml += '\x3Coption value="' + idx + '"' + (idx === savedEndIdx ? ' selected' : '') + '\x3E' +
+                    (idx + 1) + '. ' + escapeHTML(stName + arrStr) + '\x3C/option\x3E';
+            }
+        });
+        startSel.innerHTML = startOptsHtml;
+        endSel.innerHTML = endOptsHtml;
+        dutyBox.style.display = 'block';
+    }
+
+    if (autoConfirm) {
+        window.confirmAndStartCrewDuty();
+        return;
+    }
+
+    window.expandTrainConfigPanel();
+    const listContainer = document.getElementById('detailsList');
+    const mainBox = document.getElementById('mainStatusBox');
+    if (mainBox) mainBox.style.display = 'none';
+
+    const firstStName = stationNamesUpper[0] || '';
+    const lastStName = stationNamesUpper[totalStations - 1] || '';
+    const trainTitle = (pociag.numer || '') + (pociag.nazwa ? (' ' + pociag.nazwa) : '');
+
+    if (listContainer) {
+        listContainer.innerHTML =
+            '\x3Cdiv class="card glass-panel" style="border-left-color: var(--primary); padding: 16px; margin: 10px 0;"\x3E' +
+                '\x3Cdiv style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--primary); font-weight: 800; font-size: 1.05rem;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined"\x3Edirections_railway\x3C/span\x3E ' + escapeHTML(trainTitle) +
+                '\x3C/div\x3E' +
+                '\x3Cdiv style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 12px;"\x3E' +
+                    'Relacja: \x3Cstrong style="color: var(--text);"\x3E' + escapeHTML(firstStName) + ' \u2192 ' + escapeHTML(lastStName) + '\x3C/strong\x3E (' + totalStations + ' stacji)' +
+                '\x3C/div\x3E' +
+                '\x3Cdiv style="background: rgba(2, 132, 199, 0.1); border-left: 3px solid var(--primary); padding: 12px 14px; border-radius: 8px; font-size: 0.88rem; color: var(--text); line-height: 1.45;"\x3E' +
+                    '\x3Cstrong style="color: var(--primary);"\x3EKrok 3 powyżej:\x3C/strong\x3E Wybierz stację objęcia oraz stację zdania służby (zmiany DK), a następnie kliknij zielony przycisk \x3Cstrong style="color: #4ade80;"\x3E\u201EZatwierdź konfigurację pociągu\u201D\x3C/strong\x3E, aby wyświetlić trasę i uruchomić Czuwaka.' +
+                '\x3C/div\x3E' +
+            '\x3C/div\x3E';
+        listContainer.style.display = 'block';
+    }
+
+    if (dutyBox) {
+        dutyBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+};
+
+window.confirmAndStartCrewDuty = () => {
+    if (!window._pendingTrain) {
+        const trIn = document.getElementById('trainInput');
+        const nameIn = document.getElementById('trainNameInput');
+        if ((trIn && trIn.value.trim()) || (nameIn && nameIn.value.trim())) {
+            window.findTrainForConfiguration(true);
+            return;
+        }
+        alert('Najpierw wpisz numer lub nazwę pociągu i kliknij \u201EZaładuj stacje pociągu\u201D.');
+        return;
+    }
+
+    const startSel = document.getElementById('dutyStartStationSelect');
+    const endSel = document.getElementById('dutyEndStationSelect');
+    const sIdx = parseInt(startSel ? startSel.value : '0', 10) || 0;
+    const eIdx = parseInt(endSel ? endSel.value : '0', 10) || 0;
+
+    if (sIdx >= eIdx) {
+        alert('Stacja zmiany / zdania DK musi znajdować się ZA stacją objęcia pociągu.');
+        return;
+    }
+
+    window._crewDutyStartIdx = sIdx;
+    window._crewDutyEndIdx = eIdx;
+    window._crewDutyCompleted = false;
+
+    const pociag = window._pendingTrain;
+    window._currentTrainObject = pociag;
+    window._currentTrainBestMatch = window._pendingTrainBestMatch;
+
+    const cleanTrainNum = String(pociag.numer || '').trim();
+    try {
+        localStorage.setItem('CZUWAK_DUTY_SEG_' + cleanTrainNum, JSON.stringify({ startIdx: sIdx, endIdx: eIdx }));
+        localStorage.setItem('CZUWAK_CONFIRMED_TRAIN_NUM', cleanTrainNum);
+        localStorage.setItem('CZUWAK_LAST_TRAIN_NUM', cleanTrainNum);
+        localStorage.setItem('CZUWAK_LAST_TRAIN_NAME', String(pociag.nazwa || '').trim());
+    } catch (e) {}
+
+    const listContainer = document.getElementById('detailsList');
+    const mainBox = document.getElementById('mainStatusBox');
+    generujWidokTrasy(pociag, listContainer, mainBox, window._currentTrainBestMatch);
+
+    window.collapseTrainConfigPanel();
+    window.locateTrainByGPS(true);
+    window.downloadCurrentRouteMapOffline(false);
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+// ==========================================
+// RENDEROWANIE WIDOKU TRASY POCIĄGU (STACJA | PRZYJAZD | ODJAZD)
+// ==========================================
+function wyswietlWidok() {
+    const listContainer = document.getElementById('detailsList');
+    const mainBox = document.getElementById('mainStatusBox');
+    listContainer.innerHTML = '';
+
+    if (currentMode !== 'train') return;
+
+    if (window._currentTrainObject) {
+        generujWidokTrasy(window._currentTrainObject, listContainer, mainBox, window._currentTrainBestMatch);
+        return;
+    }
+
+    const confirmedNum = localStorage.getItem('CZUWAK_CONFIRMED_TRAIN_NUM');
+    const trIn = document.getElementById('trainInput');
+    const nameIn = document.getElementById('trainNameInput');
+    if (confirmedNum && ((trIn && trIn.value.trim()) || (nameIn && nameIn.value.trim()))) {
+        window.forceExactTrainMatch = true;
+        window.findTrainForConfiguration(true);
+        return;
+    }
+
+    window.renderSleepState();
 }
 
 window._crewDutyStartIdx = 0;
@@ -2972,7 +3223,10 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
                    '\x3Cspan class="material-symbols-outlined"\x3Etask_alt\x3C/span\x3E' +
                    '\x3Cspan\x3EZakończono obsługę DK na stacji \x3Cstrong style="color:#fff;"\x3E' + escapeHTML(window._crewDutyEndStationName) + '\x3C/strong\x3E – Czuwak wyłączony.\x3C/span\x3E' +
                '\x3C/div\x3E' +
-               '\x3Cbutton type="button" onclick="window.resumeCrewDutyCzuwak()" style="padding:6px 12px; border-radius:8px; border:1px solid var(--primary); background:var(--input-bg); color:var(--primary); font-weight:800; font-size:0.78rem; cursor:pointer;"\x3EWznów Czuwak\x3C/button\x3E' +
+               '\x3Cdiv style="display:flex; align-items:center; gap:6px;"\x3E' +
+                   '\x3Cbutton type="button" onclick="window.resumeCrewDutyCzuwak()" style="padding:6px 12px; border-radius:8px; border:1px solid var(--primary); background:var(--input-bg); color:var(--primary); font-weight:800; font-size:0.78rem; cursor:pointer;"\x3EWznów Czuwak\x3C/button\x3E' +
+                   '\x3Cbutton type="button" onclick="window.closeActiveTrainAndSleep()" style="padding:6px 12px; border-radius:8px; border:1px solid rgba(239, 68, 68, 0.5); background:rgba(239, 68, 68, 0.15); color:#f87171; font-weight:800; font-size:0.78rem; cursor:pointer; display:inline-flex; align-items:center; gap:4px;" title="Zamknij obsługiwany pociąg i uśpij aplikację Czuwak"\x3E\x3Cspan class="material-symbols-outlined" style="font-size:0.95rem;"\x3Epower_settings_new\x3C/span\x3E Zamknij\x3C/button\x3E' +
+               '\x3C/div\x3E' +
            '\x3C/div\x3E')
         : ('\x3Cdiv id="crewDutyStatusHeader" style="background: var(--toggle-bg); padding: 11px 15px; font-size: 0.88rem; border-bottom: 1px solid var(--table-border); display: flex; flex-direction: column; gap: 6px;"\x3E' +
                '\x3Cdiv style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;"\x3E' +
@@ -2980,10 +3234,13 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
                        '\x3Cspan class="material-symbols-outlined icon-sm" style="color: var(--primary);"\x3Ecalendar_month\x3C/span\x3E ' +
                        '\x3Cspan\x3EWyjazd: \x3Cstrong style="color: var(--text);"\x3E' + matchedDate + '\x3C/strong\x3E\x3C/span\x3E' +
                    '\x3C/div\x3E' +
-                   '\x3Cspan style="display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:999px; background:rgba(34, 197, 94, 0.16); border:1px solid #22c55e; color:#4ade80; font-size:0.76rem; font-weight:800;"\x3E' +
-                       '\x3Cspan class="material-symbols-outlined" style="font-size:0.95rem; animation:train-pulse 1.5s infinite;"\x3Eradar\x3C/span\x3E ' +
-                       'Czuwak aktywny (' + currentDistStr + ')' +
-                   '\x3C/span\x3E' +
+                   '\x3Cdiv style="display:flex; align-items:center; gap:8px;"\x3E' +
+                       '\x3Cspan style="display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:999px; background:rgba(34, 197, 94, 0.16); border:1px solid #22c55e; color:#4ade80; font-size:0.76rem; font-weight:800;"\x3E' +
+                           '\x3Cspan class="material-symbols-outlined" style="font-size:0.95rem; animation:train-pulse 1.5s infinite;"\x3Eradar\x3C/span\x3E ' +
+                           'Czuwak aktywny (' + currentDistStr + ')' +
+                       '\x3C/span\x3E' +
+                       '\x3Cbutton type="button" onclick="window.closeActiveTrainAndSleep()" style="padding:4px 9px; border-radius:6px; border:1px solid rgba(239, 68, 68, 0.5); background:rgba(239, 68, 68, 0.15); color:#f87171; font-weight:800; font-size:0.75rem; cursor:pointer; display:inline-flex; align-items:center; gap:3px;" title="Zamknij obsługiwany pociąg i uśpij aplikację Czuwak"\x3E\x3Cspan class="material-symbols-outlined" style="font-size:0.9rem;"\x3Epower_settings_new\x3C/span\x3E Zamknij\x3C/button\x3E' +
+                   '\x3C/div\x3E' +
                '\x3C/div\x3E' +
                '\x3Cdiv style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; font-size:0.8rem; color:var(--text-muted); padding-top:4px; border-top:1px dashed var(--glass-border);"\x3E' +
                    '\x3Cspan\x3EOdcinek DK: \x3Cstrong style="color:#22c55e;"\x3E' + escapeHTML(crewStartStationName) + '\x3C/strong\x3E \u2192 \x3Cstrong style="color:#f59e0b;"\x3E' + escapeHTML(window._crewDutyEndStationName) + '\x3C/strong\x3E (auto-wyłączenie)\x3C/span\x3E' +
@@ -3993,7 +4250,7 @@ function bootApplication() {
             el.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    window.submitTrainConfiguration();
+                    window.findTrainForConfiguration();
                 }
             });
         }

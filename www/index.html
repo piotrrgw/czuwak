@@ -562,9 +562,14 @@
                         </div>
                     </div>
                 </div>
-                <button type="button" style="padding: 6px 11px; border-radius: 8px; border: 1px solid var(--primary); background: rgba(2, 132, 199, 0.14); color: var(--primary); font-weight: 800; font-size: 0.78rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; min-height: 38px;">
-                    <span class="material-symbols-outlined" style="font-size: 1rem;">tune</span> Zmień
-                </button>
+                <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+                    <button type="button" onclick="event.stopPropagation(); window.toggleTrainConfigPanel(true)" style="padding: 6px 11px; border-radius: 8px; border: 1px solid var(--primary); background: rgba(2, 132, 199, 0.14); color: var(--primary); font-weight: 800; font-size: 0.78rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; min-height: 38px;" title="Zmień konfigurację pociągu">
+                        <span class="material-symbols-outlined" style="font-size: 1rem;">tune</span> Zmień
+                    </button>
+                    <button type="button" onclick="event.stopPropagation(); window.closeActiveTrainAndSleep()" style="padding: 6px 11px; border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.15); color: #f87171; font-weight: 800; font-size: 0.78rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; min-height: 38px;" title="Zamknij obsługiwany pociąg i uśpij aplikację">
+                        <span class="material-symbols-outlined" style="font-size: 1rem;">power_settings_new</span> Zamknij
+                    </button>
+                </div>
             </div>
 
             <!-- ROZWINIĘTY FORMULARZ KONFIGURACJI POCIĄGU -->
@@ -625,8 +630,8 @@
                         </div>
                     </div>
 
-                    <button type="button" id="btnConfirmTrainConfig" class="menu-btn menu-btn-primary" onclick="window.submitTrainConfiguration()" style="width: 100%; margin-top: 10px; margin-bottom: 6px; min-height: 48px; font-weight: 800; font-size: 1rem; justify-content: center; gap: 8px; box-shadow: var(--shadow);">
-                        <span class="material-symbols-outlined">check_circle</span> Zatwierdź konfigurację pociągu
+                    <button type="button" id="btnLoadTrainStations" class="menu-btn menu-btn-secondary" onclick="window.findTrainForConfiguration()" style="width: 100%; margin-top: 8px; margin-bottom: 8px; min-height: 44px; font-weight: 700; font-size: 0.92rem; justify-content: center; gap: 6px;">
+                        <span class="material-symbols-outlined">sync</span> Załaduj stacje pociągu (Krok 3)
                     </button>
 
                     <!-- KROK 3: ODCINEK OBSŁUGI DK (STACJA OBJĘCIA -> STACJA ZMIANY DK / AUTO-WYŁĄCZENIE) -->
@@ -634,7 +639,7 @@
                         <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px;">
                             <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 800; color: var(--primary);">
                                 <span class="material-symbols-outlined icon-sm">badge</span>
-                                3. Odcinek obsługi DK (auto-wyłączenie po zmianie):
+                                3. Odcinek obsługi DK:
                             </span>
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
@@ -650,11 +655,11 @@
                                     <span class="material-symbols-outlined" style="font-size: 0.95rem; color: #f59e0b;">logout</span>
                                     Stacja zmiany DK / zdania (wysiadam – wyłączy Czuwaka):
                                 </label>
-                                <select id="dutyEndStationSelect" class="duty-select" onchange="window.onCrewDutySegmentChange(true)"></select>
+                                <select id="dutyEndStationSelect" class="duty-select" onchange="window.onCrewDutySegmentChange(false)"></select>
                             </div>
                         </div>
-                        <button type="button" onclick="window.collapseTrainConfigPanel()" style="width: 100%; margin-top: 10px; padding: 10px 14px; border-radius: 8px; border: 1px solid #22c55e; background: rgba(34, 197, 94, 0.18); color: #4ade80; font-weight: 800; font-size: 0.86rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px;">
-                            <span class="material-symbols-outlined icon-sm">expand_less</span> Gotowe – zwiń konfigurację
+                        <button type="button" id="btnConfirmTrainConfig" class="menu-btn menu-btn-primary" onclick="window.confirmAndStartCrewDuty()" style="width: 100%; margin-top: 12px; margin-bottom: 4px; min-height: 48px; font-weight: 800; font-size: 1rem; justify-content: center; gap: 8px; box-shadow: var(--shadow);">
+                            <span class="material-symbols-outlined">check_circle</span> Zatwierdź konfigurację pociągu
                         </button>
                     </div>
                 </div>
