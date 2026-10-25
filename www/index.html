@@ -88,17 +88,60 @@
             border-color: var(--primary);
         }
         .orm-map-wrapper {
-            margin-top: 12px;
-            margin-bottom: 14px;
-            border-radius: 12px;
-            overflow: hidden;
-            border: 1.5px solid var(--glass-border);
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 100000;
+            background: #0f172a;
+            display: flex;
+            flex-direction: column;
+            margin: 0;
+            border-radius: 0;
+            border: none;
+            box-shadow: none;
+        }
+        .orm-map-header {
+            padding: 10px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.95);
+            border-bottom: 1px solid var(--glass-border);
+            backdrop-filter: blur(8px);
+            z-index: 100010;
+            gap: 8px;
+        }
+        .orm-header-btn {
             background: var(--input-bg);
-            box-shadow: var(--shadow);
+            border: 1px solid var(--glass-border);
+            color: var(--text);
+            border-radius: 8px;
+            min-height: 40px;
+            padding: 6px 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 0.82rem;
+            font-weight: 700;
+            transition: all 0.2s ease;
+        }
+        .orm-header-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        .orm-header-btn.close {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.4);
+            color: #f87171;
         }
         #openRailwayMapContainer {
             width: 100%;
-            height: 360px;
+            height: 100%;
+            flex: 1;
             background: #0f172a;
             z-index: 10;
         }
@@ -366,6 +409,10 @@
                             <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">Dźwięk i wibracja w pętli aż do kliknięcia „Potwierdź”</div>
                         </div>
                     </button>
+                    <div style="padding: 8px 10px; border-radius: 8px; background: rgba(245, 158, 11, 0.12); border: 1px dashed var(--warning); font-size: 0.74rem; color: var(--text); line-height: 1.35; display: flex; gap: 6px; align-items: flex-start;">
+                        <span class="material-symbols-outlined icon-sm" style="color: var(--warning); flex-shrink: 0;">do_not_disturb_on</span>
+                        <span><strong>Tryb „Nie przeszkadzać” (DND):</strong> Alarmy stacyjne Czuwaka są wysyłane z priorytetem <em>Bypass DND</em>. W ustawieniach powiadomień Androida upewnij się, że zezwolono aplikacji Czuwak na ominięcie trybu Nie przeszkadzać.</span>
+                    </div>
                 </div>
 
                 <div class="menu-btn-group">
@@ -561,24 +608,26 @@
                     <div id="trainNumberContainer">
                         <label for="trainInput" style="display:block; margin-bottom:5px; font-weight:600;">Wpisz numer pociągu:</label>
                         <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 5px;">
-                            <input type="text" inputmode="numeric" id="trainInput" list="trainsDictionary" placeholder="np. 13100 lub 3520..." oninput="window.triggerSearch()" style="flex: 1; margin-bottom: 0;">
-                            <button onclick="window.clearSearch('trainInput')" aria-label="Wyczyść" style="background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px; color: var(--text-muted); width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;">
+                            <input type="text" inputmode="numeric" id="trainInput" placeholder="np. 13100 lub 3520..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="flex: 1; margin-bottom: 0;">
+                            <button type="button" onclick="window.clearSearch('trainInput')" aria-label="Wyczyść" style="background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px; color: var(--text-muted); width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;">
                                 <span class="material-symbols-outlined icon-sm">close</span>
                             </button>
                         </div>
-                        <datalist id="trainsDictionary"></datalist>
                     </div>
                                      
                     <div id="trainNameContainer" style="display:none;">
-                        <label for="trainNameInput" style="display:block; margin-bottom:5px; font-weight:600;">Wpisz lub wybierz nazwę pociągu:</label>
+                        <label for="trainNameInput" style="display:block; margin-bottom:5px; font-weight:600;">Wpisz nazwę pociągu:</label>
                         <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 5px;">
-                            <input type="text" id="trainNameInput" list="trainNamesDictionary" placeholder="Zacznij wpisywać nazwę..." oninput="window.triggerSearch()" style="flex: 1; margin-bottom: 0;">
-                            <button onclick="window.clearSearch('trainNameInput')" aria-label="Wyczyść" style="background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px; color: var(--text-muted); width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;">
+                            <input type="text" id="trainNameInput" placeholder="np. MALINOWSKI, KRAKUS..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="flex: 1; margin-bottom: 0;">
+                            <button type="button" onclick="window.clearSearch('trainNameInput')" aria-label="Wyczyść" style="background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px; color: var(--text-muted); width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;">
                                 <span class="material-symbols-outlined icon-sm">close</span>
                             </button>
                         </div>
-                        <datalist id="trainNamesDictionary"></datalist>
                     </div>
+
+                    <button type="button" id="btnConfirmTrainConfig" class="menu-btn menu-btn-primary" onclick="window.submitTrainConfiguration()" style="width: 100%; margin-top: 10px; margin-bottom: 6px; min-height: 48px; font-weight: 800; font-size: 1rem; justify-content: center; gap: 8px; box-shadow: var(--shadow);">
+                        <span class="material-symbols-outlined">check_circle</span> Zatwierdź konfigurację pociągu
+                    </button>
 
                     <!-- KROK 3: ODCINEK OBSŁUGI DK (STACJA OBJĘCIA -> STACJA ZMIANY DK / AUTO-WYŁĄCZENIE) -->
                     <div id="crewDutyConfigBox" class="duty-config-box" style="display: none;">
@@ -644,12 +693,24 @@
                 </button>
             </div>
             <div id="openRailwayMapWrapper" class="orm-map-wrapper" style="display: none;">
-                <div style="padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; color: var(--text-muted); border-bottom: 1px solid var(--glass-border);">
-                    <span style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--text);">
+                <div class="orm-map-header">
+                    <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; color: #fff; font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                         <span class="material-symbols-outlined icon-sm" style="color: var(--primary);">train</span>
-                        OpenRailwayMap (Szlaki i sygnalizacja)
-                    </span>
-                    <span id="ormOfflineBadge" style="font-weight: 700; color: var(--open);">Cache Offline aktywny</span>
+                        <span>OpenRailwayMap</span>
+                        <span id="ormOfflineBadge" style="font-weight: 700; color: var(--open); font-size: 0.74rem; background: rgba(34, 197, 94, 0.15); padding: 2px 7px; border-radius: 999px; border: 1px solid rgba(34, 197, 94, 0.3);">Cache Offline</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                        <button type="button" class="orm-header-btn" onclick="window.centerOrmMapOnUser()" title="Wyśrodkuj na mojej pozycji GPS">
+                            <span class="material-symbols-outlined icon-sm" style="color: #22c55e;">my_location</span>
+                            <span style="font-size: 0.78rem;">Moja pozycja</span>
+                        </button>
+                        <button type="button" class="orm-header-btn" onclick="window.fitOrmMapRoute()" title="Pokaż całą trasę pociągu">
+                            <span class="material-symbols-outlined icon-sm" style="color: var(--primary);">fit_screen</span>
+                        </button>
+                        <button type="button" class="orm-header-btn close" onclick="window.toggleOpenRailwayMap(false)" title="Zamknij pełnoekranową mapę">
+                            <span class="material-symbols-outlined icon-sm">close</span>
+                        </button>
+                    </div>
                 </div>
                 <div id="openRailwayMapContainer"></div>
             </div>

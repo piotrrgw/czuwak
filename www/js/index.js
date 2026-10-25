@@ -355,13 +355,38 @@ async function fireNativeOrWebNotification(notifTitle, notifBody, alertKey) {
             if (perm.display !== 'granted') {
                 await LocalNotifications.requestPermissions();
             }
+
+            // Utwórz priorytetowy kanał powiadomień w systemie Android z ominięciem trybu Nie przeszkadzać (DND)
+            if (typeof LocalNotifications.createChannel === 'function') {
+                try {
+                    await LocalNotifications.createChannel({
+                        id: 'czuwak_approach_alarm_channel',
+                        name: 'Czuwak – Alarm i zbliżanie do stacji',
+                        description: 'Priorytetowe powiadomienia o zbliżaniu się do stacji z dźwiękiem, wibracją i ominięciem trybu Nie przeszkadzać (DND)',
+                        importance: 5,
+                        visibility: 1,
+                        vibration: true,
+                        lights: true,
+                        lightColor: '#f59e0b',
+                        bypassDnd: true
+                    });
+                } catch (chErr) {}
+            }
+
+            const alertMode = window.getAlertMode ? window.getAlertMode() : 'alarm';
+            const isAlarmMode = (alertMode === 'alarm');
+
             await LocalNotifications.schedule({
                 notifications: [
                     {
                         title: notifTitle,
                         body: notifBody,
                         id: Math.abs(alertKey.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0)) % 100000 || 1001,
-                        schedule: { at: new Date(Date.now() + 100) }
+                        channelId: 'czuwak_approach_alarm_channel',
+                        schedule: { at: new Date(Date.now() + 100) },
+                        sound: 'default',
+                        ongoing: isAlarmMode,
+                        autoCancel: !isAlarmMode
                     }
                 ]
             });
@@ -1667,8 +1692,8 @@ window.downloadPolandOrmBaseOffline = async function(isManual = false) {
                     url: 'https://a.tiles.openrailwaymap.org/standard/' + z + '/' + x + '/' + y + '.png'
                 });
                 tileTasks.push({
-                    key: 'carto_' + z + '_' + x + '_' + y,
-                    url: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/' + z + '/' + x + '/' + y + '.png'
+                    key: 'osmfr_' + z + '_' + x + '_' + y,
+                    url: 'https://a.tile.openstreetmap.fr/osmfr/' + z + '/' + x + '/' + y + '.png'
                 });
             }
         }
@@ -1733,9 +1758,9 @@ window.downloadCurrentRouteMapOffline = async function(isManual = false) {
         if (!tileMap.has(ormKey)) {
             tileMap.set(ormKey, 'https://a.tiles.openrailwaymap.org/standard/' + z + '/' + x + '/' + y + '.png');
         }
-        const cartoKey = 'carto_' + z + '_' + x + '_' + y;
-        if (!tileMap.has(cartoKey)) {
-            tileMap.set(cartoKey, 'https://a.basemaps.cartocdn.com/rastertiles/voyager/' + z + '/' + x + '/' + y + '.png');
+        const osmfrKey = 'osmfr_' + z + '_' + x + '_' + y;
+        if (!tileMap.has(osmfrKey)) {
+            tileMap.set(osmfrKey, 'https://a.tile.openstreetmap.fr/osmfr/' + z + '/' + x + '/' + y + '.png');
         }
     };
 
@@ -1784,7 +1809,7 @@ window.downloadCurrentRouteMapOffline = async function(isManual = false) {
     if (iconEl) iconEl.innerText = 'download_done';
     if (lbl) lbl.innerText = 'Mapa trasy pobrana Offline ✓';
     const badge = document.getElementById('ormOfflineBadge');
-    if (badge) badge.innerText = 'Trasa zapisana w bazie Offline (' + entries.length + ' warstw)';
+    if (badge) badge.innerText = 'Trasa w bazie Offline (' + entries.length + ' warstw)';
     window.updateStats();
 };
 
@@ -1800,13 +1825,13 @@ window.initOrUpdateOpenRailwayMap = function() {
             zoomControl: true
         });
 
-        const baseCarto = createOfflineCapableTileLayer(
-            'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-            'carto',
+        const baseOsmFr = createOfflineCapableTileLayer(
+            'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
+            'osmfr',
             {
-                maxZoom: 18,
-                subdomains: 'abcd',
-                attribution: '&' + 'copy; OpenStreetMap &' + 'copy; CARTO'
+                maxZoom: 19,
+                subdomains: 'abc',
+                attribution: '&' + 'copy; OpenStreetMap &' + 'copy; OSM-FR'
             }
         );
         const railwayOverlay = createOfflineCapableTileLayer(
@@ -1819,7 +1844,7 @@ window.initOrUpdateOpenRailwayMap = function() {
             }
         );
 
-        if (baseCarto) baseCarto.addTo(window._ormLeafletMap);
+        if (baseOsmFr) baseOsmFr.addTo(window._ormLeafletMap);
         if (railwayOverlay) railwayOverlay.addTo(window._ormLeafletMap);
         window._ormRouteLayerGroup = L.layerGroup().addTo(window._ormLeafletMap);
     }
@@ -1925,21 +1950,50 @@ window.updateOrmLiveTrainPosition = function(userLat, userLng, nextStationObj) {
     }
 };
 
-window.toggleOpenRailwayMap = function(scrollToMap = false) {
+window.centerOrmMapOnUser = function() {
+    if (!window._ormLeafletMap) return;
+    window._ormLeafletMap.invalidateSize();
+    if (window._lastTrainGpsFix && typeof window._lastTrainGpsFix.lat === 'number') {
+        window._ormLeafletMap.setView([window._lastTrainGpsFix.lat, window._lastTrainGpsFix.lng], 14, { animate: true });
+    } else if (window._currentRouteStationsWithGps && window._currentRouteStationsWithGps.length > 0) {
+        const first = window._currentRouteStationsWithGps[0];
+        window._ormLeafletMap.setView([first.lat, first.lng], 13, { animate: true });
+    }
+};
+
+window.fitOrmMapRoute = function() {
+    if (!window._ormLeafletMap || !window._currentRouteStationsWithGps) return;
+    const pts = window._currentRouteStationsWithGps;
+    if (pts.length >= 2) {
+        const bounds = L.latLngBounds(pts.map(p => [p.lat, p.lng]));
+        window._ormLeafletMap.fitBounds(bounds, { padding: [30, 30], animate: true });
+    }
+};
+
+window.toggleOpenRailwayMap = function(forceOpen = null) {
     const wrapper = document.getElementById('openRailwayMapWrapper');
     const lbl = document.getElementById('btnToggleOrmMapLabel');
     const fabMapBtn = document.getElementById('fabMapBtn');
     if (!wrapper) return;
 
-    const isHidden = (wrapper.style.display === 'none' || !wrapper.style.display);
-    if (isHidden) {
-        wrapper.style.display = 'block';
+    let shouldOpen = false;
+    if (forceOpen === true) {
+        shouldOpen = true;
+    } else if (forceOpen === false) {
+        shouldOpen = false;
+    } else {
+        const isHidden = (wrapper.style.display === 'none' || !wrapper.style.display);
+        shouldOpen = isHidden;
+    }
+
+    if (shouldOpen) {
+        wrapper.style.display = 'flex';
         if (lbl) lbl.innerText = 'Ukryj mapę OpenRailwayMap';
         if (fabMapBtn) fabMapBtn.classList.add('fab-active');
         window.initOrUpdateOpenRailwayMap();
-        if (scrollToMap) {
-            window.centerOnElement(wrapper);
-        }
+        setTimeout(() => {
+            window.centerOrmMapOnUser();
+        }, 150);
     } else {
         wrapper.style.display = 'none';
         if (lbl) lbl.innerText = 'Pokaż trasę na OpenRailwayMap';
@@ -1991,11 +2045,42 @@ window.switchMode = (mode) => {
 window.switchTrainMode = (mode) => {
     currentTrainMode = mode;
     localStorage.setItem('CZUWAK_LAST_TRAIN_MODE', mode);
-    document.getElementById('subTabTrainNumber').classList.toggle('active', mode === 'number');
-    document.getElementById('subTabTrainName').classList.toggle('active', mode === 'name');
+    const tabNum = document.getElementById('subTabTrainNumber');
+    const tabName = document.getElementById('subTabTrainName');
+    if (tabNum) tabNum.classList.toggle('active', mode === 'number');
+    if (tabName) tabName.classList.toggle('active', mode === 'name');
 
-    document.getElementById('trainNumberContainer').style.display = mode === 'number' ? 'block' : 'none';
-    document.getElementById('trainNameContainer').style.display = mode === 'name' ? 'block' : 'none';
+    const boxNum = document.getElementById('trainNumberContainer');
+    const boxName = document.getElementById('trainNameContainer');
+    if (boxNum) boxNum.style.display = mode === 'number' ? 'block' : 'none';
+    if (boxName) boxName.style.display = mode === 'name' ? 'block' : 'none';
+};
+
+window.submitTrainConfiguration = () => {
+    try {
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+        }
+    } catch (e) {}
+
+    const trInput = document.getElementById('trainInput');
+    const nameInput = document.getElementById('trainNameInput');
+    const numVal = trInput ? trInput.value.trim() : '';
+    const nameVal = nameInput ? nameInput.value.trim() : '';
+
+    if (currentTrainMode === 'number') {
+        if (!numVal) {
+            alert('Wpisz numer pociągu (np. 13100), a następnie kliknij "Zatwierdź konfigurację pociągu".');
+            if (trInput) trInput.focus();
+            return;
+        }
+    } else {
+        if (!nameVal) {
+            alert('Wpisz nazwę pociągu (np. MALINOWSKI), a następnie kliknij "Zatwierdź konfigurację pociągu".');
+            if (nameInput) nameInput.focus();
+            return;
+        }
+    }
 
     window.triggerSearch();
 };
@@ -2087,7 +2172,7 @@ window.selectTrainByNumber = (numerPociagu) => {
     window.lastSearchedTrainNum = numerPociagu;
     window.forceExactTrainMatch = true;
 
-    window.triggerSearch();
+    window.submitTrainConfiguration();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
@@ -2100,9 +2185,13 @@ window.clearSearch = (inputId) => {
     window.forceExactTrainMatch = false;
     window.expandTrainConfigPanel();
 
-    document.getElementById('detailsList').innerHTML = '';
-    document.getElementById('detailsList').style.display = 'none';
-    document.getElementById('mainStatusBox').style.display = 'none';
+    const dList = document.getElementById('detailsList');
+    if (dList) {
+        dList.innerHTML = '';
+        dList.style.display = 'none';
+    }
+    const mBox = document.getElementById('mainStatusBox');
+    if (mBox) mBox.style.display = 'none';
 
     const ormSec = document.getElementById('openRailwayMapSection');
     if (ormSec) ormSec.style.display = 'none';
@@ -2113,7 +2202,10 @@ window.clearSearch = (inputId) => {
     const fabContainer = document.getElementById('trainFabContainer');
     if (fabContainer) fabContainer.style.display = 'none';
 
-    window.triggerSearch();
+    window.lastSearchedTrainNum = '';
+    window.lastSearchedTrainName = '';
+    localStorage.removeItem('CZUWAK_LAST_TRAIN_NUM');
+    localStorage.removeItem('CZUWAK_LAST_TRAIN_NAME');
 };
 
 let searchTimeout = null;
@@ -2631,6 +2723,9 @@ function wyswietlWidok() {
         }
 
         pociagi = (bazaPociagow || []).filter(p => p.nazwa && String(p.nazwa).toUpperCase() === nazwaPociagu.toUpperCase());
+        if (pociagi.length === 0) {
+            pociagi = (bazaPociagow || []).filter(p => p.nazwa && String(p.nazwa).toUpperCase().includes(nazwaPociagu.toUpperCase()));
+        }
         if (pociagi.length === 0) {
             window.stopTrainTracking();
             window._currentTrainObject = null;
@@ -3285,10 +3380,14 @@ window.locateTrainByGPS = async (silent = false) => {
                 : null;
 
             if (rawSpeed !== null && rawSpeed >= 0) {
-                measuredSpeedKmH = Math.min(220, Math.max(0, rawSpeed * 3.6));
+                if (rawSpeed < 0.8) {
+                    measuredSpeedKmH = 0;
+                } else {
+                    measuredSpeedKmH = Math.min(220, Math.max(0, rawSpeed * 3.6));
+                }
             }
 
-            if (rawHeading !== null && rawHeading >= 0 && (rawSpeed === null || rawSpeed > 1.0)) {
+            if (rawHeading !== null && rawHeading >= 0 && (rawSpeed === null || rawSpeed > 1.2)) {
                 const headingRad = rawHeading * Math.PI / 180;
                 moveUx = Math.sin(headingRad);
                 moveUy = Math.cos(headingRad);
@@ -3297,35 +3396,42 @@ window.locateTrainByGPS = async (silent = false) => {
                 const dyKm = (userLat - window._lastTrainGpsFix.lat) * KM_PER_DEG;
                 const movedKm = Math.sqrt(dxKm * dxKm + dyKm * dyKm);
                 const dtHours = (Date.now() - window._lastTrainGpsFix.time) / 3600000;
-                if (movedKm >= 0.06) {
+                // Ignoruj drobny szum GPS w pomieszczeniach (< 90m lub < 3.5s)
+                if (movedKm >= 0.09 && dtHours >= 0.001) {
                     moveUx = dxKm / movedKm;
                     moveUy = dyKm / movedKm;
-                    if (measuredSpeedKmH === null && dtHours > 0.0003) {
+                    if (measuredSpeedKmH === null) {
                         const calcSpd = movedKm / dtHours;
-                        if (calcSpd >= 5 && calcSpd <= 220) measuredSpeedKmH = calcSpd;
+                        if (calcSpd >= 6 && calcSpd <= 220) {
+                            measuredSpeedKmH = calcSpd;
+                        } else {
+                            measuredSpeedKmH = 0;
+                        }
                     }
-                } else if (measuredSpeedKmH === null && dtHours > 0.002 && movedKm < 0.03) {
+                } else if (measuredSpeedKmH === null && dtHours >= 0.001) {
                     measuredSpeedKmH = 0;
                 }
             }
 
             if (measuredSpeedKmH !== null) {
-                if (window._smoothedSpeedKmH === null || measuredSpeedKmH < 5) {
+                if (measuredSpeedKmH < 4) {
+                    window._smoothedSpeedKmH = 0;
+                } else if (window._smoothedSpeedKmH === null || window._smoothedSpeedKmH < 4) {
                     window._smoothedSpeedKmH = measuredSpeedKmH;
                 } else {
                     window._smoothedSpeedKmH = 0.65 * measuredSpeedKmH + 0.35 * window._smoothedSpeedKmH;
                 }
             }
 
-            const currentSpeedKmH = window._smoothedSpeedKmH !== null
+            const currentSpeedKmH = (window._smoothedSpeedKmH !== null && window._smoothedSpeedKmH >= 4)
                 ? window._smoothedSpeedKmH
-                : (measuredSpeedKmH !== null ? measuredSpeedKmH : 0);
+                : ((measuredSpeedKmH !== null && measuredSpeedKmH >= 4) ? measuredSpeedKmH : 0);
             const isStoppedAtStation = (minDistance <= 0.30 && currentSpeedKmH < 5);
-            const displaySpeedKmH = isStoppedAtStation ? 0 : currentSpeedKmH;
+            const displaySpeedKmH = (isStoppedAtStation || currentSpeedKmH < 4) ? 0 : currentSpeedKmH;
 
             window.updateSpeedAndGpsIndicator(displaySpeedKmH, isHighConfidenceGps ? 'ok' : 'bts');
 
-            if (!window._lastTrainGpsFix || getDistance(userLat, userLng, window._lastTrainGpsFix.lat, window._lastTrainGpsFix.lng) >= 0.06) {
+            if (!window._lastTrainGpsFix || getDistance(userLat, userLng, window._lastTrainGpsFix.lat, window._lastTrainGpsFix.lng) >= 0.08) {
                 window._lastTrainGpsFix = { lat: userLat, lng: userLng, time: Date.now(), speedKmH: displaySpeedKmH };
             }
 
@@ -3601,10 +3707,6 @@ window.locateTrainByGPS = async (silent = false) => {
                 const effectiveSpeedForTunnel = (window._smoothedSpeedKmH && window._smoothedSpeedKmH >= 20)
                     ? window._smoothedSpeedKmH
                     : scheduledSegSpeedKmH;
-
-                if (window._smoothedSpeedKmH === null || window._smoothedSpeedKmH < 5) {
-                    window.updateSpeedAndGpsIndicator(scheduledSegSpeedKmH, isHighConfidenceGps ? 'ok' : 'bts');
-                }
 
                 // Zapisz pełny stan aktywnego odcinka dla silnika tunelowego (Dead Reckoning v2)
                 window._lastActiveSegmentState = {
@@ -3884,6 +3986,18 @@ document.addEventListener('visibilitychange', () => {
 function bootApplication() {
     window.syncAlertConfigUI();
     window.syncTrainDateButtonsUI();
+
+    ['trainInput', 'trainNameInput'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    window.submitTrainConfiguration();
+                }
+            });
+        }
+    });
 
     let forceDbUpdate = false;
     if (localStorage.getItem('FORCE_DB_UPDATE') === 'true') {
