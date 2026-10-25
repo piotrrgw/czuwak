@@ -43,13 +43,39 @@ function getSystemTheme() {
 function syncThemeUI(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     if (themeIcon) {
-        themeIcon.innerText = theme === 'dark' ? 'light_mode' : 'dark_mode';
+        if (theme === 'dark') {
+            themeIcon.innerText = 'nightlight';
+            themeIcon.title = 'Motyw Ciemny (kliknij: Czerń OLED)';
+        } else if (theme === 'oled') {
+            themeIcon.innerText = 'light_mode';
+            themeIcon.title = 'Motyw Czerń OLED (kliknij: Tryb Jasny)';
+        } else {
+            themeIcon.innerText = 'dark_mode';
+            themeIcon.title = 'Motyw Jasny (kliknij: Tryb Ciemny)';
+        }
     }
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
-        metaThemeColor.setAttribute('content', theme === 'dark' ? '#0f172a' : '#2563eb');
+        const col = theme === 'oled' ? '#000000' : (theme === 'dark' ? '#0f172a' : '#2563eb');
+        metaThemeColor.setAttribute('content', col);
+    }
+    const menuThemeLabel = document.getElementById('menuThemeLabel');
+    if (menuThemeLabel) {
+        if (theme === 'oled') menuThemeLabel.innerText = 'Motyw: Czerń OLED (0% baterii)';
+        else if (theme === 'dark') menuThemeLabel.innerText = 'Motyw: Ciemny (Granat)';
+        else menuThemeLabel.innerText = 'Motyw: Jasny';
     }
 }
+
+window.cycleTheme = function() {
+    const themeNow = document.documentElement.getAttribute('data-theme') || 'dark';
+    let newTheme = 'oled';
+    if (themeNow === 'dark') newTheme = 'oled';
+    else if (themeNow === 'oled') newTheme = 'light';
+    else newTheme = 'dark';
+    localStorage.setItem('CZUWAK_THEME_PREFERENCE', newTheme);
+    syncThemeUI(newTheme);
+};
 
 window.resetThemeToAuto = function() {
     localStorage.removeItem('CZUWAK_THEME_PREFERENCE');
@@ -60,14 +86,11 @@ window.resetThemeToAuto = function() {
 
 if (themeToggle && themeIcon) {
     let savedPref = localStorage.getItem('CZUWAK_THEME_PREFERENCE');
-    let effectiveTheme = (savedPref === 'dark' || savedPref === 'light') ? savedPref : getSystemTheme();
+    let effectiveTheme = (savedPref === 'dark' || savedPref === 'light' || savedPref === 'oled') ? savedPref : getSystemTheme();
     syncThemeUI(effectiveTheme);
 
     themeToggle.addEventListener('click', () => {
-        const themeNow = document.documentElement.getAttribute('data-theme') || 'dark';
-        const newTheme = themeNow === 'dark' ? 'light' : 'dark';
-        localStorage.setItem('CZUWAK_THEME_PREFERENCE', newTheme);
-        syncThemeUI(newTheme);
+        window.cycleTheme();
     });
 
     if (window.matchMedia) {
@@ -442,9 +465,17 @@ window.triggerStationApproachAlert = (stationName, distanceKm, forceTest = false
     window.stopAlarmLoop();
     window.playStationChime();
 
-    // 2. Zsynchronizowana wibracja urządzenia
+    const isHandoverStation = (typeof window._crewDutyEndStationName === 'string' &&
+        window._crewDutyEndStationName &&
+        String(stationName).toUpperCase().trim() === window._crewDutyEndStationName);
+
+    // 2. Zsynchronizowana wibracja urządzenia (różny wzorzec dla stacji zmiany DK vs pośredniej)
+    const hapticPattern = isHandoverStation
+        ? [400, 150, 400, 150, 600, 200, 800]
+        : [250, 100, 250, 350, 250, 100, 250];
+
     if ('vibrate' in navigator) {
-        try { navigator.vibrate([250, 100, 250, 350, 250, 100, 250]); } catch (e) {}
+        try { navigator.vibrate(hapticPattern); } catch (e) {}
     }
 
     // Jeśli wybrany jest TRYB BUDZIKA (alarm), zapętlamy gong i wibrację co 3.8s do czasu potwierdzenia!
@@ -456,12 +487,12 @@ window.triggerStationApproachAlert = (stationName, distanceKm, forceTest = false
             }
             window.playStationChime();
             if ('vibrate' in navigator) {
-                try { navigator.vibrate([300, 120, 300, 280, 300, 120, 300]); } catch (e) {}
+                try { navigator.vibrate(hapticPattern); } catch (e) {}
             }
         }, 3800);
     }
 
-    // 3. Pływający baner wizualny z odliczaniem kilometrów oraz przyciskiem potwierdzenia budzika
+    // 3. Pływający baner wizualny w dolnej strefie kciuka z odliczaniem kilometrów
     let toast = document.getElementById('stationApproachToast');
     if (!toast) {
         toast = document.createElement('div');
@@ -470,21 +501,29 @@ window.triggerStationApproachAlert = (stationName, distanceKm, forceTest = false
         document.body.appendChild(toast);
     }
     const borderCol = isAlarmLoopMode ? '#f59e0b' : 'var(--primary)';
-    toast.style.cssText = 'position:fixed; top:18px; left:50%; transform:translateX(-50%); z-index:99999; max-width:94%; width:460px; padding:14px 16px; border-radius:14px; background:rgba(15, 23, 42, 0.97); border:2px solid ' + borderCol + '; box-shadow:0 12px 28px -5px rgba(0,0,0,0.75), 0 0 24px rgba(245, 158, 11, 0.35); display:flex; flex-direction:column; gap:10px; animation: slideDownToast 0.35s ease-out;';
+    toast.style.cssText = 'position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:99999; max-width:94%; width:460px; padding:16px 18px; border-radius:16px; background:rgba(15, 23, 42, 0.98); border:2px solid ' + borderCol + '; box-shadow:0 -10px 30px rgba(0,0,0,0.85), 0 0 25px rgba(245, 158, 11, 0.4); display:flex; flex-direction:column; gap:12px; animation: slideUpToast 0.3s ease-out;';
 
     const estTag = isEstimated ? ' (estymacja w tunelu)' : '';
-    const isHandoverStation = (typeof window._crewDutyEndStationName === 'string' &&
-        window._crewDutyEndStationName &&
-        String(stationName).toUpperCase().trim() === window._crewDutyEndStationName);
+
+    let tagAlertNoticeHtml = '';
+    const stIdxMatch = window._currentRouteStationsWithGps && window._currentRouteStationsWithGps.find(s => s && s.name === String(stationName).toUpperCase().trim());
+    if (stIdxMatch && typeof stIdxMatch.index === 'number') {
+        const stationTagText = window.getStationTag(stIdxMatch.index);
+        if (stationTagText) {
+            tagAlertNoticeHtml = '\x3Cdiv style="padding:6px 12px; border-radius:8px; background:rgba(236,72,153,0.18); border:1px solid #ec4899; color:#f472b6; font-size:0.82rem; font-weight:800; display:flex; align-items:center; gap:6px;"\x3E' +
+                '\x3Cspan class="material-symbols-outlined" style="font-size:1rem;"\x3Ebookmark\x3C/span\x3E Znacznik drużyny: ' + escapeHTML(stationTagText) +
+            '\x3C/div\x3E';
+        }
+    }
 
     const handoverButtonHtml = isHandoverStation
-        ? ('\x3Cbutton type="button" data-stname="' + escapeHTML(stationName) + '" onclick="window.completeCrewDutyAndStopCzuwak(this.dataset.stname, \'Odhaczono stację zmiany DK na banerze alarmu\')" style="width:100%; padding:11px 14px; border-radius:10px; border:1.5px solid #22c55e; background:rgba(34, 197, 94, 0.2); color:#4ade80; font-weight:900; font-size:0.9rem; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; text-transform:uppercase; letter-spacing:0.4px;"\x3E' +
+        ? ('\x3Cbutton type="button" data-stname="' + escapeHTML(stationName) + '" onclick="window.completeCrewDutyAndStopCzuwak(this.dataset.stname, \'Odhaczono stację zmiany DK na banerze alarmu\')" style="width:100%; min-height:52px; padding:12px 16px; border-radius:12px; border:1.5px solid #22c55e; background:rgba(34, 197, 94, 0.22); color:#4ade80; font-weight:900; font-size:0.95rem; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; text-transform:uppercase; letter-spacing:0.4px;"\x3E' +
             '\x3Cspan class="material-symbols-outlined"\x3Etask_alt\x3C/span\x3E Odhacz zmianę DK i wyłącz Czuwak' +
            '\x3C/button\x3E')
         : '';
 
     const alarmAckButtonHtml = isAlarmLoopMode
-        ? ('\x3Cbutton id="btnAckStationAlarm" type="button" onclick="window.acknowledgeStationAlarm()" style="width:100%; padding:12px 16px; border-radius:10px; border:none; background:linear-gradient(135deg, #f59e0b, #d97706); color:#fff; font-weight:900; font-size:0.96rem; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 12px rgba(245, 158, 11, 0.4); text-transform:uppercase; letter-spacing:0.5px;"\x3E' +
+        ? ('\x3Cbutton id="btnAckStationAlarm" type="button" onclick="window.acknowledgeStationAlarm()" style="width:100%; min-height:52px; padding:12px 16px; border-radius:12px; border:none; background:linear-gradient(135deg, #f59e0b, #d97706); color:#fff; font-weight:900; font-size:1rem; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 14px rgba(245, 158, 11, 0.5); text-transform:uppercase; letter-spacing:0.5px;"\x3E' +
             '\x3Cspan class="material-symbols-outlined"\x3Enotifications_off\x3C/span\x3E Potwierdź komunikat / Wycisz Czuwak' +
            '\x3C/button\x3E')
         : '';
@@ -495,24 +534,25 @@ window.triggerStationApproachAlert = (stationName, distanceKm, forceTest = false
 
     toast.innerHTML =
         '\x3Cdiv style="display:flex; align-items:center; gap:12px; width:100%;"\x3E' +
-            '\x3Cdiv style="width:42px; height:42px; border-radius:50%; background:rgba(2, 132, 199, 0.25); display:flex; align-items:center; justify-content:center; flex-shrink:0; border:1px solid ' + borderCol + ';"\x3E' +
-                '\x3Cspan class="material-symbols-outlined" style="color:' + borderCol + '; font-size:1.65rem; animation:train-pulse 1.2s infinite;"\x3E' + (isAlarmLoopMode ? 'alarm_on' : 'notification_important') + '\x3C/span\x3E' +
+            '\x3Cdiv style="width:44px; height:44px; border-radius:50%; background:rgba(2, 132, 199, 0.25); display:flex; align-items:center; justify-content:center; flex-shrink:0; border:1.5px solid ' + borderCol + ';"\x3E' +
+                '\x3Cspan class="material-symbols-outlined" style="color:' + borderCol + '; font-size:1.75rem; animation:train-pulse 1.2s infinite;"\x3E' + (isAlarmLoopMode ? 'alarm_on' : 'notification_important') + '\x3C/span\x3E' +
             '\x3C/div\x3E' +
             '\x3Cdiv style="flex:1; min-width:0;"\x3E' +
                 '\x3Cdiv style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; color:' + borderCol + '; font-weight:800; display:flex; align-items:center; gap:6px;"\x3E' +
                     '\x3Cspan class="material-symbols-outlined icon-sm" style="font-size:0.9rem;"\x3Etrip_origin\x3C/span\x3E ' +
                     headerAlertLabel +
                 '\x3C/div\x3E' +
-                '\x3Cdiv id="stationApproachToastName" style="font-size:1.12rem; font-weight:800; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"\x3E' + escapeHTML(stationName) + '\x3C/div\x3E' +
-                '\x3Cdiv id="stationApproachToastDist" style="font-size:0.84rem; color:#cbd5e1; margin-top:2px;"\x3E' +
+                '\x3Cdiv id="stationApproachToastName" style="font-size:1.15rem; font-weight:900; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"\x3E' + escapeHTML(stationName) + '\x3C/div\x3E' +
+                '\x3Cdiv id="stationApproachToastDist" style="font-size:0.86rem; color:#cbd5e1; margin-top:2px;"\x3E' +
                     'Pozostało ok. \x3Cstrong style="color:#38bdf8; font-size:1.05rem;"\x3E' + distanceKm.toFixed(1) + ' km' + estTag + '\x3C/strong\x3E. ' +
                     (isHandoverStation ? 'Wygłoś komunikat i przygotuj się do zdania składu.' : 'Wygłoś komunikat pożegnalny.') +
                 '\x3C/div\x3E' +
             '\x3C/div\x3E' +
-            '\x3Cbutton onclick="window.dismissStationApproachToast()" aria-label="Zamknij powiadomienie" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#cbd5e1; cursor:pointer; padding:6px; display:flex; align-items:center; justify-content:center;"\x3E' +
-                '\x3Cspan class="material-symbols-outlined icon-sm"\x3Eclose\x3C/span\x3E' +
+            '\x3Cbutton onclick="window.dismissStationApproachToast()" aria-label="Zamknij powiadomienie" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#cbd5e1; cursor:pointer; padding:8px; display:flex; align-items:center; justify-content:center; min-height:44px;"\x3E' +
+                '\x3Cspan class="material-symbols-outlined"\x3Eclose\x3C/span\x3E' +
             '\x3C/button\x3E' +
         '\x3C/div\x3E' +
+        tagAlertNoticeHtml +
         alarmAckButtonHtml +
         handoverButtonHtml;
 
@@ -2591,6 +2631,7 @@ function formatNowHHMMSS() {
            String(d.getMinutes()).padStart(2, '0') + ':' +
            String(d.getSeconds()).padStart(2, '0');
 }
+window.formatNowHHMMSS = formatNowHHMMSS;
 
 window._trainDelayMinutes = 0;
 
@@ -2605,6 +2646,107 @@ function addMinutesToHHMM(hhmmStr, extraMinutes) {
     const newM = totalMin % 60;
     return String(newH).padStart(2, '0') + ':' + String(newM).padStart(2, '0');
 }
+
+window.isAutoDelayEnabled = () => {
+    return localStorage.getItem('CZUWAK_AUTO_DELAY_ENABLED') !== 'false';
+};
+
+window.setAutoDelayEnabled = (val) => {
+    localStorage.setItem('CZUWAK_AUTO_DELAY_ENABLED', val ? 'true' : 'false');
+    const menuLabel = document.getElementById('menuAutoDelayLabel');
+    if (menuLabel) {
+        menuLabel.innerText = 'Auto-obliczanie opóźnień z GPS: ' + (val ? 'WŁĄCZONE' : 'WYŁĄCZONE');
+    }
+};
+
+window.toggleAutoDelayEnabled = () => {
+    const cur = window.isAutoDelayEnabled();
+    window.setAutoDelayEnabled(!cur);
+    alert('Automatyczne wyliczanie opóźnienia ze stacji zostało ' + (!cur ? 'WŁĄCZONE' : 'WYŁĄCZONE') + '.');
+};
+
+window.showAutoDelayToast = (stName, delayMin, typeLabel = '') => {
+    let toast = document.getElementById('autoDelayToast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'autoDelayToast';
+        toast.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99998; background:rgba(15,23,42,0.96); border:1.5px solid #f59e0b; border-radius:999px; padding:8px 18px; color:#ffffff; font-size:0.84rem; font-weight:800; display:flex; align-items:center; gap:8px; box-shadow:0 8px 24px rgba(0,0,0,0.5); backdrop-filter:blur(8px); transition:opacity 0.3s ease; animation: slideDownToast 0.3s ease-out;';
+        document.body.appendChild(toast);
+    }
+    const txt = delayMin > 0
+        ? ('+' + delayMin + ' min opóźnienia (' + stName + ')')
+        : ('Pociąg jedzie planowo (' + stName + ')');
+    toast.innerHTML = '\x3Cspan class="material-symbols-outlined icon-sm" style="color:#fbbf24;"\x3Eschedule\x3C/span\x3E ' +
+        '\x3Cspan\x3EAuto-opóźnienie: \x3Cstrong style="color:#fbbf24;"\x3E' + escapeHTML(txt) + '\x3C/strong\x3E\x3C/span\x3E';
+    toast.style.display = 'flex';
+    toast.style.opacity = '1';
+
+    if (window._autoDelayToastTimer) clearTimeout(window._autoDelayToastTimer);
+    window._autoDelayToastTimer = setTimeout(() => {
+        if (toast) {
+            toast.style.opacity = '0';
+            setTimeout(() => { if (toast) toast.style.display = 'none'; }, 300);
+        }
+    }, 3800);
+};
+
+window.autoCalculateDelayFromActualTime = (idx) => {
+    if (!window.isAutoDelayEnabled()) return;
+    if (!window._currentTrainObject) return;
+
+    const stacjeArray = Array.isArray(window._currentTrainObject.stacje)
+        ? window._currentTrainObject.stacje
+        : Object.values(window._currentTrainObject.stacje || {});
+    if (idx < 0 || idx >= stacjeArray.length) return;
+
+    const entry = window._stationActualLog && window._stationActualLog[idx];
+    if (!entry) return;
+
+    const stObj = stacjeArray[idx];
+    const arrStr = (stObj && typeof stObj === 'object' && stObj.przyjazd && stObj.przyjazd !== '-') ? String(stObj.przyjazd).trim() : null;
+    const depStr = (stObj && typeof stObj === 'object' && stObj.odjazd && stObj.odjazd !== '-') ? String(stObj.odjazd).trim() : null;
+    const stName = (stObj && typeof stObj === 'object' && stObj.nazwa) ? stObj.nazwa : ('Stacja ' + (idx + 1));
+
+    let actTime = null;
+    let planTime = null;
+    let typeLabel = '';
+
+    if (entry.actualDep && depStr) {
+        actTime = entry.actualDep;
+        planTime = depStr;
+        typeLabel = 'odjazdu';
+    } else if (entry.actualArr && arrStr) {
+        actTime = entry.actualArr;
+        planTime = arrStr;
+        typeLabel = 'przyjazdu';
+    } else if (entry.actualArr && depStr) {
+        actTime = entry.actualArr;
+        planTime = depStr;
+        typeLabel = 'postoju';
+    }
+
+    if (!actTime || !planTime) return;
+
+    const actParts = actTime.split(':');
+    const planParts = planTime.split(':');
+    if (actParts.length < 2 || planParts.length < 2) return;
+
+    const actH = parseInt(actParts[0], 10);
+    const actM = parseInt(actParts[1], 10);
+    const planH = parseInt(planParts[0], 10);
+    const planM = parseInt(planParts[1], 10);
+    if (isNaN(actH) || isNaN(actM) || isNaN(planH) || isNaN(planM)) return;
+
+    let diffMin = (actH * 60 + actM) - (planH * 60 + planM);
+    if (diffMin < -720) diffMin += 1440;
+    if (diffMin > 720) diffMin -= 1440;
+
+    const calculatedDelay = Math.max(0, diffMin);
+    if (calculatedDelay !== window._trainDelayMinutes) {
+        window.setTrainDelay(calculatedDelay);
+        window.showAutoDelayToast(stName, calculatedDelay, typeLabel);
+    }
+};
 
 window.setTrainDelay = (minutes) => {
     let delay = parseInt(minutes, 10);
@@ -2632,19 +2774,76 @@ window.setTrainDelay = (minutes) => {
     }
 };
 
-window.promptSetTrainDelay = () => {
+window.closeCzuwakSheet = () => {
+    const existing = document.getElementById('czuwakSheetOverlay');
+    if (existing) existing.remove();
+};
+
+window.openDelaySheet = () => {
+    window.closeCzuwakSheet();
+    const curDelay = window._trainDelayMinutes || 0;
+    const isAuto = window.isAutoDelayEnabled();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'czuwakSheetOverlay';
+    overlay.className = 'czuwak-sheet-overlay';
+    overlay.onclick = (e) => {
+        if (e.target === overlay) window.closeCzuwakSheet();
+    };
+
+    const pills = [0, 3, 5, 10, 15, 20, 30, 45, 60];
+    let pillsHtml = '';
+    pills.forEach((p) => {
+        const isActive = (curDelay === p);
+        const label = p === 0 ? 'Plan (0m)' : ('+' + p + 'm');
+        pillsHtml += '\x3Cbutton type="button" class="quick-delay-pill' + (isActive ? ' active' : '') + '" data-val="' + p + '" onclick="window.setTrainDelay(this.dataset.val); window.openDelaySheet();"\x3E' + label + '\x3C/button\x3E';
+    });
+
+    overlay.innerHTML =
+        '\x3Cdiv class="czuwak-sheet-content"\x3E' +
+            '\x3Cdiv style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"\x3E' +
+                '\x3Cdiv style="font-size:1.05rem; font-weight:900; color:var(--text); display:flex; align-items:center; gap:6px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined" style="color:var(--primary);"\x3Eschedule\x3C/span\x3E Opóźnienie pociągu' +
+                '\x3C/div\x3E' +
+                '\x3Cbutton type="button" onclick="window.closeCzuwakSheet()" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; padding:4px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined"\x3Eclose\x3C/span\x3E' +
+                '\x3C/button\x3E' +
+            '\x3C/div\x3E' +
+            '\x3Cdiv style="text-align:center; padding:12px; background:var(--input-bg); border-radius:12px; border:1px solid var(--glass-border); margin-bottom:12px;"\x3E' +
+                '\x3Cdiv style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted); font-weight:800;"\x3EAktualne opóźnienie pociągu\x3C/div\x3E' +
+                '\x3Cdiv id="sheetDelayValueBig" style="font-size:2.4rem; font-weight:900; color:' + (curDelay > 0 ? '#fbbf24' : '#22c55e') + '; font-variant-numeric:tabular-nums; margin:4px 0;"\x3E' +
+                    (curDelay > 0 ? ('+' + curDelay + ' min') : 'Planowo (0 min)') +
+                '\x3C/div\x3E' +
+                '\x3Cdiv style="display:flex; gap:8px; justify-content:center; margin-top:8px;"\x3E' +
+                    '\x3Cbutton type="button" data-delta="-5" onclick="window.changeDelayBy(-5)" class="hud-btn" style="flex:0 0 auto; min-height:38px; padding:6px 14px;"\x3E-5m\x3C/button\x3E' +
+                    '\x3Cbutton type="button" data-delta="-1" onclick="window.changeDelayBy(-1)" class="hud-btn" style="flex:0 0 auto; min-height:38px; padding:6px 14px;"\x3E-1m\x3C/button\x3E' +
+                    '\x3Cbutton type="button" data-delta="1" onclick="window.changeDelayBy(1)" class="hud-btn" style="flex:0 0 auto; min-height:38px; padding:6px 14px;"\x3E+1m\x3C/button\x3E' +
+                    '\x3Cbutton type="button" data-delta="5" onclick="window.changeDelayBy(5)" class="hud-btn" style="flex:0 0 auto; min-height:38px; padding:6px 14px;"\x3E+5m\x3C/button\x3E' +
+                '\x3C/div\x3E' +
+            '\x3C/div\x3E' +
+            '\x3Cdiv style="font-size:0.8rem; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:6px;"\x3ESzybki wybór:\x3C/div\x3E' +
+            '\x3Cdiv class="quick-delay-grid"\x3E' + pillsHtml + '\x3C/div\x3E' +
+            '\x3Clabel style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--input-bg); border-radius:10px; border:1px solid var(--glass-border); margin-bottom:14px; cursor:pointer;"\x3E' +
+                '\x3Cinput type="checkbox" id="sheetAutoDelayChk" ' + (isAuto ? 'checked' : '') + ' onchange="window.setAutoDelayEnabled(this.checked)" style="width:20px; height:20px; accent-color:var(--primary); cursor:pointer;"\x3E' +
+                '\x3Cspan style="font-size:0.82rem; font-weight:700; color:var(--text); line-height:1.3;"\x3EAutomatycznie aktualizuj opóźnienie z GPS na stacjach (postój / odjazd)\x3C/span\x3E' +
+            '\x3C/label\x3E' +
+            '\x3Cbutton type="button" onclick="window.closeCzuwakSheet()" class="menu-btn menu-btn-primary" style="width:100%; min-height:50px; font-size:1rem; font-weight:900; justify-content:center; gap:6px;"\x3E' +
+                '\x3Cspan class="material-symbols-outlined"\x3Echeck_circle\x3C/span\x3E Gotowe' +
+            '\x3C/button\x3E' +
+        '\x3C/div\x3E';
+
+    document.body.appendChild(overlay);
+};
+
+window.changeDelayBy = (delta) => {
     const cur = window._trainDelayMinutes || 0;
-    const input = prompt(
-        "Podaj bie\u017c\u0105ce op\u00f3\u017anienie poci\u0105gu w minutach (np. 15, 30, 45 lub 0 je\u015bli poci\u0105g jedzie planowo):",
-        String(cur)
-    );
-    if (input === null) return;
-    const parsed = parseInt(input.trim(), 10);
-    if (isNaN(parsed) || parsed < 0) {
-        window.setTrainDelay(0);
-    } else {
-        window.setTrainDelay(parsed);
-    }
+    const nextVal = Math.max(0, cur + Number(delta));
+    window.setTrainDelay(nextVal);
+    window.openDelaySheet();
+};
+
+window.promptSetTrainDelay = () => {
+    window.openDelaySheet();
 };
 
 function getActualTimesStorageKey() {
@@ -2679,6 +2878,206 @@ function getCheckmarkSvgHtml(isChecked) {
     return '\x3Csvg viewBox="0 0 24 24" aria-hidden="true"\x3E\x3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/\x3E\x3C/svg\x3E';
 }
 
+function getStationTagStorageKey(trainNum, idx) {
+    return 'CZUWAK_STATION_TAG_' + String(trainNum) + '_' + String(idx);
+}
+window.getStationTag = (idx) => {
+    const trNum = window._currentActiveTrainNumber || (window._currentTrainObject && window._currentTrainObject.numer) || '';
+    if (!trNum) return null;
+    return localStorage.getItem(getStationTagStorageKey(trNum, idx)) || null;
+};
+window.setStationTag = (idx, tagText) => {
+    const trNum = window._currentActiveTrainNumber || (window._currentTrainObject && window._currentTrainObject.numer) || '';
+    if (!trNum) return;
+    if (tagText) {
+        localStorage.setItem(getStationTagStorageKey(trNum, idx), tagText);
+    } else {
+        localStorage.removeItem(getStationTagStorageKey(trNum, idx));
+    }
+    if (window._currentTrainObject) {
+        generujWidokTrasy(
+            window._currentTrainObject,
+            document.getElementById('detailsList'),
+            document.getElementById('mainStatusBox'),
+            window._currentTrainBestMatch
+        );
+    }
+};
+
+window.openStationTagModal = (idxStr) => {
+    window.closeCzuwakSheet();
+    const idx = parseInt(idxStr, 10);
+    if (isNaN(idx) || idx < 0) return;
+    if (!window._currentTrainObject) return;
+
+    const stacjeArray = Array.isArray(window._currentTrainObject.stacje)
+        ? window._currentTrainObject.stacje
+        : Object.values(window._currentTrainObject.stacje || {});
+    const stObj = stacjeArray[idx] || {};
+    const stName = (typeof stObj === 'object' && stObj.nazwa) ? stObj.nazwa : ('Stacja ' + (idx + 1));
+    const curTag = window.getStationTag(idx) || '';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'czuwakSheetOverlay';
+    overlay.className = 'czuwak-sheet-overlay';
+    overlay.onclick = (e) => { if (e.target === overlay) window.closeCzuwakSheet(); };
+
+    const presets = [
+        { label: '♿ Wózek / PRM', val: '♿ PRM' },
+        { label: '🚲 Rowery', val: '🚲 Rowery' },
+        { label: '⚠️ Krótki peron', val: '⚠️ Krótki peron' },
+        { label: '👥 Grupa podróżnych', val: '👥 Grupa' },
+        { label: '⚡ Awaria drzwi', val: '⚡ Awaria drzwi' }
+    ];
+
+    let presetsHtml = '';
+    presets.forEach(p => {
+        presetsHtml += '\x3Cbutton type="button" data-val="' + escapeHTML(p.val) + '" onclick="document.getElementById(\'stationTagCustomInput\').value = this.dataset.val;" class="hud-btn" style="min-height:42px; text-align:left; justify-content:flex-start;"\x3E' +
+            escapeHTML(p.label) +
+        '\x3C/button\x3E';
+    });
+
+    overlay.innerHTML =
+        '\x3Cdiv class="czuwak-sheet-content"\x3E' +
+            '\x3Cdiv style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"\x3E' +
+                '\x3Cdiv style="font-size:1.05rem; font-weight:900; color:var(--text); display:flex; align-items:center; gap:6px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined" style="color:var(--primary);"\x3Ebookmark\x3C/span\x3E Znacznik: ' + escapeHTML(stName) +
+                '\x3C/div\x3E' +
+                '\x3Cbutton type="button" onclick="window.closeCzuwakSheet()" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; padding:4px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined"\x3Eclose\x3C/span\x3E' +
+                '\x3C/button\x3E' +
+            '\x3C/div\x3E' +
+            '\x3Cdiv style="font-size:0.8rem; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin-bottom:6px;"\x3ESzybkie znaczniki drużyny:\x3C/div\x3E' +
+            '\x3Cdiv style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px;"\x3E' + presetsHtml + '\x3C/div\x3E' +
+            '\x3Cdiv style="margin-bottom:14px;"\x3E' +
+                '\x3Clabel style="display:block; font-size:0.8rem; font-weight:800; color:var(--text); margin-bottom:4px;"\x3ETreść znacznika lub notatka:\x3C/label\x3E' +
+                '\x3Cinput type="text" id="stationTagCustomInput" value="' + escapeHTML(curTag) + '" placeholder="np. ♿ PRM lub Krótki peron..." style="width:100%; padding:9px 12px; font-weight:800; font-size:0.95rem; border-radius:8px; border:1px solid var(--input-border); background:var(--input-bg); color:var(--text);"\x3E' +
+            '\x3C/div\x3E' +
+            '\x3Cdiv style="display:flex; gap:8px;"\x3E' +
+                '\x3Cbutton type="button" data-stidx="' + idx + '" onclick="window.setStationTag(this.dataset.stidx, document.getElementById(\'stationTagCustomInput\').value.trim()); window.closeCzuwakSheet();" class="menu-btn menu-btn-primary" style="flex:2; min-height:48px; font-weight:900; justify-content:center; gap:6px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined"\x3Echeck\x3C/span\x3E Zapisz znacznik' +
+                '\x3C/button\x3E' +
+                '\x3Cbutton type="button" data-stidx="' + idx + '" onclick="window.setStationTag(this.dataset.stidx, null); window.closeCzuwakSheet();" class="menu-btn menu-btn-secondary" style="flex:1; min-height:48px; color:#f87171; justify-content:center;"\x3E' +
+                    'Usuń' +
+                '\x3C/button\x3E' +
+            '\x3C/div\x3E' +
+        '\x3C/div\x3E';
+
+    document.body.appendChild(overlay);
+};
+
+window.openEditStationTimeModal = (idxStr) => {
+    window.closeCzuwakSheet();
+    const idx = parseInt(idxStr, 10);
+    if (isNaN(idx) || idx < 0) return;
+    if (!window._currentTrainObject) return;
+
+    const stacjeArray = Array.isArray(window._currentTrainObject.stacje)
+        ? window._currentTrainObject.stacje
+        : Object.values(window._currentTrainObject.stacje || {});
+    const stObj = stacjeArray[idx] || {};
+    const stName = (typeof stObj === 'object' && stObj.nazwa) ? stObj.nazwa : ('Stacja ' + (idx + 1));
+    const arrPlan = (typeof stObj === 'object' && stObj.przyjazd && stObj.przyjazd !== '-') ? stObj.przyjazd : '-';
+    const depPlan = (typeof stObj === 'object' && stObj.odjazd && stObj.odjazd !== '-') ? stObj.odjazd : '-';
+
+    const entry = (window._stationActualLog && window._stationActualLog[idx]) ? window._stationActualLog[idx] : {};
+    const curArr = entry.actualArr || '';
+    const curDep = entry.actualDep || '';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'czuwakSheetOverlay';
+    overlay.className = 'czuwak-sheet-overlay';
+    overlay.onclick = (e) => { if (e.target === overlay) window.closeCzuwakSheet(); };
+
+    overlay.innerHTML =
+        '\x3Cdiv class="czuwak-sheet-content"\x3E' +
+            '\x3Cdiv style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"\x3E' +
+                '\x3Cdiv style="font-size:1.05rem; font-weight:900; color:var(--text); display:flex; align-items:center; gap:6px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined" style="color:var(--primary);"\x3Eedit_calendar\x3C/span\x3E ' + escapeHTML(stName) +
+                '\x3C/div\x3E' +
+                '\x3Cbutton type="button" onclick="window.closeCzuwakSheet()" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; padding:4px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined"\x3Eclose\x3C/span\x3E' +
+                '\x3C/button\x3E' +
+            '\x3C/div\x3E' +
+            '\x3Cdiv style="padding:8px 12px; background:var(--input-bg); border-radius:8px; border:1px solid var(--glass-border); margin-bottom:12px; font-size:0.82rem; color:var(--text-muted); display:flex; justify-content:space-between;"\x3E' +
+                '\x3Cspan\x3EPlan. przyjazd: \x3Cstrong style="color:var(--text);"\x3E' + escapeHTML(arrPlan) + '\x3C/strong\x3E\x3C/span\x3E' +
+                '\x3Cspan\x3EPlan. odjazd: \x3Cstrong style="color:var(--text);"\x3E' + escapeHTML(depPlan) + '\x3C/strong\x3E\x3C/span\x3E' +
+            '\x3C/div\x3E' +
+            '\x3Cdiv style="margin-bottom:12px;"\x3E' +
+                '\x3Clabel style="display:block; font-size:0.8rem; font-weight:800; color:var(--text); margin-bottom:4px;"\x3ERzeczywisty przyjazd / postój (HH:MM:SS):\x3C/label\x3E' +
+                '\x3Cdiv style="display:flex; gap:6px;"\x3E' +
+                    '\x3Cinput type="text" id="editActualArrInput" value="' + escapeHTML(curArr) + '" placeholder="np. 14:25:10" style="flex:1; padding:8px 10px; font-weight:800; font-size:0.95rem; border-radius:8px; border:1px solid var(--input-border); background:var(--input-bg); color:var(--text);"\x3E' +
+                    '\x3Cbutton type="button" onclick="document.getElementById(\'editActualArrInput\').value = window.formatNowHHMMSS()" class="hud-btn" style="min-height:44px;"\x3ETeraz\x3C/button\x3E' +
+                    '\x3Cbutton type="button" onclick="document.getElementById(\'editActualArrInput\').value = \'\'" class="hud-btn" style="min-height:44px; color:#f87171;"\x3EUsuń\x3C/button\x3E' +
+                '\x3C/div\x3E' +
+            '\x3C/div\x3E' +
+            '\x3Cdiv style="margin-bottom:14px;"\x3E' +
+                '\x3Clabel style="display:block; font-size:0.8rem; font-weight:800; color:var(--text); margin-bottom:4px;"\x3ERzeczywisty odjazd (HH:MM:SS):\x3C/label\x3E' +
+                '\x3Cdiv style="display:flex; gap:6px;"\x3E' +
+                    '\x3Cinput type="text" id="editActualDepInput" value="' + escapeHTML(curDep) + '" placeholder="np. 14:27:00" style="flex:1; padding:8px 10px; font-weight:800; font-size:0.95rem; border-radius:8px; border:1px solid var(--input-border); background:var(--input-bg); color:var(--text);"\x3E' +
+                    '\x3Cbutton type="button" onclick="document.getElementById(\'editActualDepInput\').value = window.formatNowHHMMSS()" class="hud-btn" style="min-height:44px;"\x3ETeraz\x3C/button\x3E' +
+                    '\x3Cbutton type="button" onclick="document.getElementById(\'editActualDepInput\').value = \'\'" class="hud-btn" style="min-height:44px; color:#f87171;"\x3EUsuń\x3C/button\x3E' +
+                '\x3C/div\x3E' +
+            '\x3C/div\x3E' +
+            '\x3Clabel style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:var(--input-bg); border-radius:8px; border:1px solid var(--glass-border); margin-bottom:14px; cursor:pointer;"\x3E' +
+                '\x3Cinput type="checkbox" id="editAutoCalcDelayChk" checked style="width:18px; height:18px; accent-color:var(--primary); cursor:pointer;"\x3E' +
+                '\x3Cspan style="font-size:0.8rem; font-weight:700; color:var(--text);"\x3EPrzelicz automatycznie opóźnienie pociągu na podstawie tego czasu\x3C/span\x3E' +
+            '\x3C/label\x3E' +
+            '\x3Cdiv style="display:flex; gap:8px;"\x3E' +
+                '\x3Cbutton type="button" data-stidx="' + idx + '" onclick="window.saveEditedStationTime(this.dataset.stidx)" class="menu-btn menu-btn-primary" style="flex:2; min-height:48px; font-weight:900; justify-content:center; gap:6px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined"\x3Esave\x3C/span\x3E Zapisz czas' +
+                '\x3C/button\x3E' +
+                '\x3Cbutton type="button" data-stidx="' + idx + '" onclick="window.deleteStationStopActual(this.dataset.stidx)" class="menu-btn menu-btn-danger" style="flex:1; min-height:48px; font-weight:800; justify-content:center;"\x3E' +
+                    'Skasuj' +
+                '\x3C/button\x3E' +
+            '\x3C/div\x3E' +
+        '\x3C/div\x3E';
+
+    document.body.appendChild(overlay);
+};
+
+window.saveEditedStationTime = (idxStr) => {
+    const idx = parseInt(idxStr, 10);
+    if (isNaN(idx) || idx < 0) return;
+    const arrIn = document.getElementById('editActualArrInput');
+    const depIn = document.getElementById('editActualDepInput');
+    const autoCalcChk = document.getElementById('editAutoCalcDelayChk');
+
+    const arrVal = arrIn ? arrIn.value.trim() : '';
+    const depVal = depIn ? depIn.value.trim() : '';
+    const shouldAutoCalc = autoCalcChk ? autoCalcChk.checked : true;
+
+    if (!window._stationActualLog) window._stationActualLog = {};
+    if (!arrVal && !depVal) {
+        delete window._stationActualLog[idx];
+    } else {
+        window._stationActualLog[idx] = {
+            checked: true,
+            actualArr: arrVal || null,
+            actualDep: depVal || null
+        };
+    }
+
+    saveStationActualLog();
+    window.renderStationRowActualUI(idx);
+    window.closeCzuwakSheet();
+
+    if (shouldAutoCalc && (arrVal || depVal)) {
+        window.autoCalculateDelayFromActualTime(idx);
+    }
+};
+
+window.deleteStationStopActual = (idxStr) => {
+    const idx = parseInt(idxStr, 10);
+    if (isNaN(idx) || idx < 0) return;
+    if (window._stationActualLog && window._stationActualLog[idx]) {
+        delete window._stationActualLog[idx];
+        saveStationActualLog();
+        window.renderStationRowActualUI(idx);
+    }
+    window.closeCzuwakSheet();
+};
+
 window.renderStationRowActualUI = (idx) => {
     const entry = (window._stationActualLog && window._stationActualLog[idx]) ? window._stationActualLog[idx] : null;
     const isChecked = !!(entry && entry.checked);
@@ -2697,7 +3096,10 @@ window.renderStationRowActualUI = (idx) => {
     const arrBox = document.getElementById('actualArrBox_' + idx);
     if (arrBox) {
         if (entry && entry.actualArr) {
-            arrBox.innerHTML = '\x3Cdiv class="actual-time-badge arr" title="Rzeczywisty czas zatrzymania na stacji"\x3EPostój: \x3Cstrong\x3E' + escapeHTML(entry.actualArr) + '\x3C/strong\x3E\x3C/div\x3E';
+            arrBox.innerHTML = '\x3Cdiv class="actual-time-badge arr editable" data-stidx="' + idx + '" onclick="window.openEditStationTimeModal(this.dataset.stidx)" title="Kliknij, aby edytować rzeczywisty czas zatrzymania"\x3E' +
+                'Postój: \x3Cstrong\x3E' + escapeHTML(entry.actualArr) + '\x3C/strong\x3E ' +
+                '\x3Cspan class="material-symbols-outlined" style="font-size:0.72rem; opacity:0.8;"\x3Eedit\x3C/span\x3E' +
+            '\x3C/div\x3E';
         } else {
             arrBox.innerHTML = '';
         }
@@ -2706,7 +3108,10 @@ window.renderStationRowActualUI = (idx) => {
     const depBox = document.getElementById('actualDepBox_' + idx);
     if (depBox) {
         if (entry && entry.actualDep) {
-            depBox.innerHTML = '\x3Cdiv class="actual-time-badge dep" title="Rzeczywisty czas odjazdu ze stacji"\x3EOdj.: \x3Cstrong\x3E' + escapeHTML(entry.actualDep) + '\x3C/strong\x3E\x3C/div\x3E';
+            depBox.innerHTML = '\x3Cdiv class="actual-time-badge dep editable" data-stidx="' + idx + '" onclick="window.openEditStationTimeModal(this.dataset.stidx)" title="Kliknij, aby edytować rzeczywisty czas odjazdu"\x3E' +
+                'Odj.: \x3Cstrong\x3E' + escapeHTML(entry.actualDep) + '\x3C/strong\x3E ' +
+                '\x3Cspan class="material-symbols-outlined" style="font-size:0.72rem; opacity:0.8;"\x3Eedit\x3C/span\x3E' +
+            '\x3C/div\x3E';
         } else {
             depBox.innerHTML = '';
         }
@@ -2732,6 +3137,7 @@ window.recordStationArrivalStop = (idx, customTimeStr = null) => {
     if (changed) {
         saveStationActualLog();
         window.renderStationRowActualUI(idx);
+        window.autoCalculateDelayFromActualTime(idx);
     }
 };
 
@@ -2754,6 +3160,7 @@ window.recordStationDeparture = (idx, customTimeStr = null) => {
     if (changed) {
         saveStationActualLog();
         window.renderStationRowActualUI(idx);
+        window.autoCalculateDelayFromActualTime(idx);
     }
 };
 
@@ -2768,14 +3175,36 @@ window.toggleStationStopManual = (idxStr) => {
             actualArr: (cur && cur.actualArr) ? cur.actualArr : formatNowHHMMSS(),
             actualDep: (cur && cur.actualDep) ? cur.actualDep : null
         };
+        saveStationActualLog();
+        window.renderStationRowActualUI(idx);
+        window.autoCalculateDelayFromActualTime(idx);
     } else if (!cur.actualDep) {
         cur.actualDep = formatNowHHMMSS();
+        saveStationActualLog();
+        window.renderStationRowActualUI(idx);
+        window.autoCalculateDelayFromActualTime(idx);
     } else {
         delete window._stationActualLog[idx];
+        saveStationActualLog();
+        window.renderStationRowActualUI(idx);
     }
-    saveStationActualLog();
-    window.renderStationRowActualUI(idx);
 };
+
+window._routeFilterMode = localStorage.getItem('CZUWAK_ROUTE_FILTER_MODE') || 'all';
+
+window.setRouteFilterMode = (mode) => {
+    window._routeFilterMode = (mode === 'duty') ? 'duty' : 'all';
+    localStorage.setItem('CZUWAK_ROUTE_FILTER_MODE', window._routeFilterMode);
+    if (window._currentTrainObject) {
+        generujWidokTrasy(
+            window._currentTrainObject,
+            document.getElementById('detailsList'),
+            document.getElementById('mainStatusBox'),
+            window._currentTrainBestMatch
+        );
+    }
+};
+
 
 // ==========================================
 // WYSZUKIWANIE POCIĄGU DO KONFIGURACJI (KROK 2 -> KROK 3)
@@ -3173,6 +3602,137 @@ window.setCrewDutyEndStation = (endIdx) => {
     window.onCrewDutySegmentChange(true);
 };
 
+// ==========================================
+// KARTA HERO „NASTĘPNA STACJA”, MINI-WIDGET HUD I WIDGET EKRANU BLOKADY (MEDIASESSION)
+// ==========================================
+window._lastNextStationHudData = null;
+
+window.ensureFloatingMiniHud = () => {
+    let miniHud = document.getElementById('floatingMiniHud');
+    if (!miniHud) {
+        miniHud = document.createElement('div');
+        miniHud.id = 'floatingMiniHud';
+        miniHud.className = 'floating-mini-hud';
+        miniHud.style.display = 'none';
+        miniHud.innerHTML =
+            '\x3Cdiv class="mini-hud-left"\x3E' +
+                '\x3Cspan class="material-symbols-outlined" style="color:var(--primary); font-size:1.3rem;"\x3Etrain\x3C/span\x3E' +
+                '\x3Cdiv style="min-width:0; flex:1;"\x3E' +
+                    '\x3Cdiv id="floatingMiniHudName" class="mini-hud-name"\x3ENastępna stacja\x3C/div\x3E' +
+                    '\x3Cdiv id="floatingMiniHudDist" class="mini-hud-dist"\x3E-- km\x3C/div\x3E' +
+                '\x3C/div\x3E' +
+            '\x3C/div\x3E' +
+            '\x3Cbutton type="button" onclick="event.stopPropagation(); window.centerOnActiveTrainPosition();" style="background:var(--primary); color:#ffffff; border:none; border-radius:999px; padding:6px 12px; font-size:0.75rem; font-weight:900; display:inline-flex; align-items:center; gap:4px; cursor:pointer;"\x3E' +
+                '\x3Cspan class="material-symbols-outlined" style="font-size:0.9rem;"\x3Emy_location\x3C/span\x3E Wyśrodkuj' +
+            '\x3C/button\x3E';
+        miniHud.onclick = () => {
+            window.centerOnActiveTrainPosition();
+        };
+        document.body.appendChild(miniHud);
+    }
+};
+
+window.addEventListener('scroll', () => {
+    const miniHud = document.getElementById('floatingMiniHud');
+    if (!miniHud) return;
+    if (window._currentTrainObject && !window._crewDutyCompleted && window.scrollY > 280) {
+        miniHud.style.display = 'flex';
+    } else {
+        miniHud.style.display = 'none';
+    }
+}, { passive: true });
+
+window.markCurrentHudStationStop = () => {
+    if (window._lastNextStationHudData && typeof window._lastNextStationHudData.index === 'number') {
+        window.toggleStationStopManual(window._lastNextStationHudData.index);
+    } else if (typeof window._crewDutyStartIdx === 'number') {
+        window.toggleStationStopManual(window._crewDutyStartIdx);
+    }
+};
+
+window.updateNextStationHud = (hudData) => {
+    if (!hudData) return;
+    window._lastNextStationHudData = hudData;
+
+    const heroEl = document.getElementById('nextStationHeroCard');
+    const miniHud = document.getElementById('floatingMiniHud');
+
+    const stName = hudData.name || '';
+    const distKm = hudData.distKm;
+    const distStr = (typeof distKm === 'number') ? ('~' + distKm.toFixed(1) + ' km') : (hudData.distStr || '--');
+    const isStationStop = !!hudData.isStationStop;
+    const etaStr = hudData.etaStr || '';
+    const schedArr = hudData.schedArr || '';
+    const delayedArr = hudData.delayedArr || '';
+    const isHandover = !!hudData.isHandover;
+    const tag = hudData.tag || null;
+
+    if (heroEl) {
+        heroEl.classList.toggle('is-handover', isHandover);
+        const titleEl = document.getElementById('heroHudStationName');
+        if (titleEl) titleEl.innerText = stName;
+
+        const badgeEl = document.getElementById('heroHudTypeBadge');
+        if (badgeEl) {
+            if (isHandover) {
+                badgeEl.innerHTML = '\x3Cspan class="material-symbols-outlined" style="font-size:0.95rem; color:#f59e0b;"\x3Elogout\x3C/span\x3E \x3Cstrong style="color:#fbbf24;"\x3ESTACJA ZMIANY DK (ZDANIE SKŁADU)\x3C/strong\x3E';
+            } else if (isStationStop) {
+                badgeEl.innerHTML = '\x3Cspan class="material-symbols-outlined" style="font-size:0.95rem; color:#22c55e;"\x3Eschedule\x3C/span\x3E \x3Cstrong style="color:#4ade80;"\x3EPOSTÓJ NA STACJI\x3C/strong\x3E';
+            } else {
+                badgeEl.innerHTML = '\x3Cspan class="material-symbols-outlined" style="font-size:0.95rem; color:var(--primary); animation:train-pulse 1.5s infinite;"\x3Eradar\x3C/span\x3E \x3Cspan style="color:var(--text-muted); font-weight:800;"\x3ENASTĘPNA STACJA\x3C/span\x3E';
+            }
+        }
+
+        const distBadge = document.getElementById('heroHudDistanceBadge');
+        if (distBadge) distBadge.innerText = distStr;
+
+        const etaBadge = document.getElementById('heroHudEtaBadge');
+        if (etaBadge) etaBadge.innerText = etaStr;
+
+        const timeRow = document.getElementById('heroHudTimesRow');
+        if (timeRow) {
+            let timeHtml = '\x3Cspan\x3EPlan. przyjazd: \x3Cstrong style="color:var(--text);"\x3E' + escapeHTML(schedArr || '-') + '\x3C/strong\x3E\x3C/span\x3E';
+            if (window._trainDelayMinutes > 0 && delayedArr) {
+                timeHtml += ' \u2192 \x3Cspan class="delay-forecast-badge"\x3E\x3Cspan class="material-symbols-outlined" style="font-size:0.75rem;"\x3Eschedule\x3C/span\x3E ' + escapeHTML(delayedArr) + '\x3C/span\x3E';
+            }
+            timeRow.innerHTML = timeHtml;
+        }
+
+        const tagBox = document.getElementById('heroHudTagBox');
+        if (tagBox) {
+            if (tag) {
+                tagBox.innerHTML = '\x3Cspan class="station-crew-tag custom"\x3E\x3Cspan class="material-symbols-outlined" style="font-size:0.85rem;"\x3Ebookmark\x3C/span\x3E ' + escapeHTML(tag) + '\x3C/span\x3E';
+                tagBox.style.display = 'inline-flex';
+            } else {
+                tagBox.innerHTML = '';
+                tagBox.style.display = 'none';
+            }
+        }
+    }
+
+    if (miniHud) {
+        const miniName = document.getElementById('floatingMiniHudName');
+        const miniDist = document.getElementById('floatingMiniHudDist');
+        if (miniName) miniName.innerText = (isStationStop ? 'Postój: ' : '\u2794 ') + stName;
+        if (miniDist) miniDist.innerText = distStr + (etaStr ? (' • ' + etaStr) : '');
+    }
+
+    // MediaSession Widget na ekranie blokady
+    if ('mediaSession' in navigator && window._currentTrainObject) {
+        try {
+            const trNum = window._currentActiveTrainNumber || '';
+            const trName = window._currentTrainObject.nazwa ? (' ' + window._currentTrainObject.nazwa) : '';
+            const delayStr = window._trainDelayMinutes > 0 ? (' (+' + window._trainDelayMinutes + 'm)') : '';
+            const nextPrefix = isStationStop ? 'Postój: ' : 'Następna: ';
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: trNum + trName + delayStr + ' \u2192 ' + stName,
+                artist: distStr + (etaStr ? (' • ' + etaStr) : '') + (tag ? (' • ' + tag) : ''),
+                album: 'Odcinek DK: ' + (window._crewDutyStartStationName || '') + ' \u2192 ' + (window._crewDutyEndStationName || '')
+            });
+        } catch (e) {}
+    }
+};
+
 function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
     window._currentTrainObject = pociag;
     const fabContainer = document.getElementById('trainFabContainer');
@@ -3287,10 +3847,10 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
 
     const delayBadgeHtml = '\x3Cdiv style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;"\x3E' +
         '\x3Cspan style="font-size:0.78rem; color:var(--text-muted); font-weight:700;"\x3EOpóźnienie:\x3C/span\x3E' +
-        '\x3Cbutton type="button" onclick="window.promptSetTrainDelay()" style="padding:3px 9px; border-radius:6px; border:1px solid ' + (window._trainDelayMinutes > 0 ? '#f59e0b' : 'var(--glass-border)') + '; background:' + (window._trainDelayMinutes > 0 ? 'rgba(245, 158, 11, 0.22)' : 'rgba(255, 255, 255, 0.06)') + '; color:' + (window._trainDelayMinutes > 0 ? '#fbbf24' : 'var(--text)') + '; font-weight:800; font-size:0.75rem; cursor:pointer; display:inline-flex; align-items:center; gap:4px;" title="Kliknij, aby ustawić bieżące opóźnienie pociągu"\x3E' +
+        '\x3Cbutton type="button" onclick="window.openDelaySheet()" style="padding:3px 9px; border-radius:6px; border:1px solid ' + (window._trainDelayMinutes > 0 ? '#f59e0b' : 'var(--glass-border)') + '; background:' + (window._trainDelayMinutes > 0 ? 'rgba(245, 158, 11, 0.22)' : 'rgba(255, 255, 255, 0.06)') + '; color:' + (window._trainDelayMinutes > 0 ? '#fbbf24' : 'var(--text)') + '; font-weight:800; font-size:0.75rem; cursor:pointer; display:inline-flex; align-items:center; gap:4px;" title="Kliknij, aby ustawić bieżące opóźnienie pociągu"\x3E' +
             '\x3Cspan class="material-symbols-outlined" style="font-size:0.9rem;"\x3Eschedule\x3C/span\x3E ' +
             (window._trainDelayMinutes > 0 ? ('+' + window._trainDelayMinutes + ' min') : 'Planowo (0 min)') +
-            '\x3Cspan class="material-symbols-outlined" style="font-size:0.8rem; opacity:0.7;"\x3Eedit\x3C/span\x3E' +
+            '\x3Cspan class="material-symbols-outlined" style="font-size:0.8rem; opacity:0.7;"\x3Etune\x3C/span\x3E' +
         '\x3C/button\x3E' +
         (window._trainDelayMinutes > 0
             ? ('\x3Cbutton type="button" onclick="window.setTrainDelay(0)" style="padding:3px 7px; border-radius:5px; border:1px solid rgba(239, 68, 68, 0.4); background:rgba(239, 68, 68, 0.12); color:#f87171; font-size:0.7rem; font-weight:700; cursor:pointer;" title="Skasuj opóźnienie (0 min)"\x3EKasuj\x3C/button\x3E')
@@ -3328,11 +3888,52 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
                '\x3C/div\x3E' +
            '\x3C/div\x3E');
 
-    let html = '\x3Cdiv class="card glass-panel" style="border-left-color: var(--primary); padding: 0;"\x3E' +
-        '\x3Cdiv class="card-header" style="background: var(--primary); color: var(--primary-text);"\x3E' +
+    const dutyCount = Math.max(1, (window._crewDutyEndIdx - window._crewDutyStartIdx + 1));
+    const isDutyActive = (window._routeFilterMode === 'duty');
+    const dutyFilterToggleHtml = '\x3Cdiv class="duty-filter-toggle"\x3E' +
+        '\x3Cbutton type="button" class="duty-filter-btn' + (!isDutyActive ? ' active' : '') + '" onclick="window.setRouteFilterMode(\'all\')"\x3ECała trasa (' + totalStations + ')\x3C/button\x3E' +
+        '\x3Cbutton type="button" class="duty-filter-btn' + (isDutyActive ? ' active' : '') + '" onclick="window.setRouteFilterMode(\'duty\')"\x3EMój odcinek DK (' + dutyCount + ')\x3C/button\x3E' +
+    '\x3C/div\x3E';
+
+    const heroHudCardHtml =
+        '\x3Cdiv id="nextStationHeroCard" class="next-station-hud-card"\x3E' +
+            '\x3Cdiv style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;"\x3E' +
+                '\x3Cdiv id="heroHudTypeBadge" style="display:inline-flex; align-items:center; gap:5px; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined" style="font-size:0.95rem; color:var(--primary); animation:train-pulse 1.5s infinite;"\x3Eradar\x3C/span\x3E ' +
+                    '\x3Cspan style="color:var(--text-muted); font-weight:800;"\x3ENASTĘPNA STACJA\x3C/span\x3E' +
+                '\x3C/div\x3E' +
+                '\x3Cdiv id="heroHudTagBox" style="display:none;"\x3E\x3C/div\x3E' +
+            '\x3C/div\x3E' +
+            '\x3Cdiv id="heroHudStationName" class="hud-station-title"\x3E' +
+                escapeHTML(stationNamesUpper[window._crewDutyStartIdx] || 'Wczytywanie...') +
+            '\x3C/div\x3E' +
+            '\x3Cdiv class="hud-metrics-row"\x3E' +
+                '\x3Cdiv id="heroHudDistanceBadge" class="hud-distance-badge"\x3E-- km\x3C/div\x3E' +
+                '\x3Cdiv id="heroHudEtaBadge" class="hud-eta-badge"\x3E\x3Cspan class="material-symbols-outlined" style="font-size:0.85rem;"\x3Eschedule\x3C/span\x3E ETA --:--\x3C/div\x3E' +
+            '\x3C/div\x3E' +
+            '\x3Cdiv id="heroHudTimesRow" style="font-size:0.82rem; color:var(--text-muted); display:flex; align-items:center; gap:6px; flex-wrap:wrap;"\x3E' +
+                '\x3Cspan\x3EPlan. przyjazd: \x3Cstrong style="color:var(--text);"\x3E-\x3C/strong\x3E\x3C/span\x3E' +
+            '\x3C/div\x3E' +
+            '\x3Cdiv class="hud-actions-row"\x3E' +
+                '\x3Cbutton type="button" class="hud-btn primary" onclick="window.markCurrentHudStationStop()"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined" style="font-size:1rem;"\x3Echeck_circle\x3C/span\x3E Odhacz postój' +
+                '\x3C/button\x3E' +
+                '\x3Cbutton type="button" class="hud-btn" onclick="window.centerOnActiveTrainPosition()"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined" style="font-size:1rem;"\x3Emy_location\x3C/span\x3E Wyśrodkuj' +
+                '\x3C/button\x3E' +
+                '\x3Cbutton type="button" class="hud-btn" onclick="window.openDelaySheet()"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined" style="font-size:1rem;"\x3Eschedule\x3C/span\x3E Opóźnienie' +
+                '\x3C/button\x3E' +
+            '\x3C/div\x3E' +
+        '\x3C/div\x3E';
+
+    let html = heroHudCardHtml +
+        '\x3Cdiv class="card glass-panel" style="border-left-color: var(--primary); padding: 0;"\x3E' +
+        '\x3Cdiv class="card-header" style="background: var(--primary); color: var(--primary-text); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;"\x3E' +
             '\x3Cdiv class="carrier-title" style="color: var(--primary-text); font-size: 1.2rem; display:flex; align-items:center; gap:6px;"\x3E' +
                 '\x3Cspan class="material-symbols-outlined"\x3Eroute\x3C/span\x3E Trasa pociągu' +
             '\x3C/div\x3E' +
+            dutyFilterToggleHtml +
         '\x3C/div\x3E' +
         dutyStatusHeaderHtml +
         '\x3Ctable class="train-route-table"\x3E' +
@@ -3405,12 +4006,33 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
         let rowClass = (idx === activeStationIndex) ? 'active-station-row station-with-train' : '';
         if (isOutsideDuty) rowClass = (rowClass ? rowClass + ' ' : '') + 'outside-duty-row';
 
+        const isHiddenByFilter = (window._routeFilterMode === 'duty' && isOutsideDuty);
+        const rowStyleAttr = isHiddenByFilter ? ' style="display:none;"' : '';
+
         const stAbs = absTimes[idx] || { arr: null, dep: null, onlyBoarding: false, onlyAlighting: false };
         const absArrAttr = (stAbs.arr !== null) ? ' data-abs-arr="' + stAbs.arr + '"' : '';
         const absDepAttr = (stAbs.dep !== null) ? ' data-abs-dep="' + stAbs.dep + '"' : '';
 
         const actualEntry = (window._stationActualLog && window._stationActualLog[idx]) ? window._stationActualLog[idx] : null;
         const isStopChecked = !!(actualEntry && actualEntry.checked);
+
+        const stationTag = window.getStationTag(idx);
+        let tagBadgeHtml = '';
+        if (stationTag) {
+            let tagClass = 'custom';
+            if (stationTag.indexOf('PRM') !== -1 || stationTag.indexOf('Wózek') !== -1) tagClass = 'prm';
+            else if (stationTag.indexOf('Rower') !== -1) tagClass = 'bike';
+            else if (stationTag.indexOf('peron') !== -1) tagClass = 'platform';
+            else if (stationTag.indexOf('Grupa') !== -1) tagClass = 'group';
+
+            tagBadgeHtml = '\x3Cbutton type="button" class="station-crew-tag ' + tagClass + '" data-stidx="' + idx + '" onclick="window.openStationTagModal(this.dataset.stidx)" title="Kliknij, aby edytować znacznik drużyny"\x3E' +
+                '\x3Cspan class="material-symbols-outlined" style="font-size:0.8rem;"\x3Ebookmark\x3C/span\x3E ' + escapeHTML(stationTag) +
+            '\x3C/button\x3E';
+        } else {
+            tagBadgeHtml = '\x3Cbutton type="button" class="station-crew-tag" style="background:transparent; border:1px dashed var(--glass-border); color:var(--text-muted); opacity:0.65;" data-stidx="' + idx + '" onclick="window.openStationTagModal(this.dataset.stidx)" title="Dodaj znacznik drużyny (PRM, Rower, Peron)"\x3E' +
+                '\x3Cspan class="material-symbols-outlined" style="font-size:0.85rem;"\x3Ebookmark_add\x3C/span\x3E +Tag' +
+            '\x3C/button\x3E';
+        }
 
         let dutyRoleBadgeHtml = '';
         if (idx === window._crewDutyStartIdx) {
@@ -3436,10 +4058,10 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
         }
 
         const actualArrHtml = (actualEntry && actualEntry.actualArr)
-            ? ('\x3Cdiv class="actual-time-badge arr" title="Rzeczywisty czas zatrzymania na stacji"\x3EPostój: \x3Cstrong\x3E' + escapeHTML(actualEntry.actualArr) + '\x3C/strong\x3E\x3C/div\x3E')
+            ? ('\x3Cdiv class="actual-time-badge arr editable" data-stidx="' + idx + '" onclick="window.openEditStationTimeModal(this.dataset.stidx)" title="Kliknij, aby edytować rzeczywisty czas zatrzymania"\x3EPostój: \x3Cstrong\x3E' + escapeHTML(actualEntry.actualArr) + '\x3C/strong\x3E \x3Cspan class="material-symbols-outlined" style="font-size:0.72rem; opacity:0.8;"\x3Eedit\x3C/span\x3E\x3C/div\x3E')
             : '';
         const actualDepHtml = (actualEntry && actualEntry.actualDep)
-            ? ('\x3Cdiv class="actual-time-badge dep" title="Rzeczywisty czas odjazdu ze stacji"\x3EOdj.: \x3Cstrong\x3E' + escapeHTML(actualEntry.actualDep) + '\x3C/strong\x3E\x3C/div\x3E')
+            ? ('\x3Cdiv class="actual-time-badge dep editable" data-stidx="' + idx + '" onclick="window.openEditStationTimeModal(this.dataset.stidx)" title="Kliknij, aby edytować rzeczywisty czas odjazdu"\x3EOdj.: \x3Cstrong\x3E' + escapeHTML(actualEntry.actualDep) + '\x3C/strong\x3E \x3Cspan class="material-symbols-outlined" style="font-size:0.72rem; opacity:0.8;"\x3Eedit\x3C/span\x3E\x3C/div\x3E')
             : '';
 
         let arrCellHtml = '\x3Cdiv\x3E' + escapeHTML(arrStr) + '\x3C/div\x3E';
@@ -3464,7 +4086,7 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
         }
         depCellHtml += '\x3Cdiv id="actualDepBox_' + idx + '"\x3E' + actualDepHtml + '\x3C/div\x3E';
 
-        html += '\x3Ctr class="' + rowClass + '" data-station-idx="' + idx + '"' + absArrAttr + absDepAttr + '\x3E' +
+        html += '\x3Ctr class="' + rowClass + '" data-station-idx="' + idx + '"' + absArrAttr + absDepAttr + rowStyleAttr + '\x3E' +
             '\x3Ctd class="station-name-td" data-label="Stacja"\x3E' +
                 '\x3Cdiv class="station-cell-wrapper"\x3E' +
                     '\x3Cdiv class="station-name-row-line"\x3E' +
@@ -3473,6 +4095,7 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
                         '\x3C/button\x3E' +
                         '\x3Cspan class="station-clickable" style="text-decoration:none; cursor:default;"\x3E' + escapeHTML(stacjaNazwa) + '\x3C/span\x3E' +
                         '\x3Cspan id="stationStopTag_' + idx + '" class="station-stop-tag" style="display:' + (isStopChecked ? 'inline-flex' : 'none') + ';"\x3E✓ Postój\x3C/span\x3E' +
+                        tagBadgeHtml +
                     '\x3C/div\x3E' +
                     dutyRoleBadgeHtml +
                 '\x3C/div\x3E' +
@@ -3481,7 +4104,7 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
             '\x3Ctd data-label="Odjazd:"\x3E' + depCellHtml + '\x3C/td\x3E' +
         '\x3C/tr\x3E';
 
-        if (idx === activeStationIndex) {
+        if (idx === activeStationIndex && !isHiddenByFilter) {
             const isOrigin = (idx === 0);
             let standingBadgeText = 'Planowy postój pociągu na stacji: ' + escapeHTML(stacjaNazwa);
             if (isOrigin && relNow !== null && stAbs.dep !== null) {
@@ -3507,7 +4130,7 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
             '\x3C/tr\x3E';
         }
 
-        if (idx === activeBetweenIndex) {
+        if (idx === activeBetweenIndex && !isHiddenByFilter) {
             html += '\x3Ctr class="train-moving-row"\x3E' +
                 '\x3Ctd colspan="3" style="padding: 0; border: none; background: transparent;"\x3E' +
                     '\x3Cdiv style="background: rgba(2, 132, 199, 0.1); display: flex; flex-direction: column; padding: 10px 0; overflow: hidden; position: relative; border-radius: 8px;"\x3E' +
@@ -3523,7 +4146,15 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
         }
     });
 
-    html += '\x3C/tbody\x3E\x3C/table\x3E\x3C/div\x3E';
+    let hiddenNoticeHtml = '';
+    if (isDutyActive && (totalStations - dutyCount > 0)) {
+        hiddenNoticeHtml = '\x3Cdiv style="padding:10px 14px; background:var(--input-bg); font-size:0.8rem; color:var(--text-muted); display:flex; align-items:center; justify-content:space-between; border-top:1px dashed var(--glass-border); flex-wrap:wrap; gap:8px;"\x3E' +
+            '\x3Cspan\x3E\x3Cspan class="material-symbols-outlined" style="font-size:0.9rem; vertical-align:middle; color:var(--primary);"\x3Efilter_alt\x3C/span\x3E Ukryto ' + (totalStations - dutyCount) + ' stacji spoza odcinka służby DK.\x3C/span\x3E' +
+            '\x3Cbutton type="button" onclick="window.setRouteFilterMode(\'all\')" style="background:transparent; border:1px solid var(--primary); color:var(--primary); border-radius:6px; padding:3px 8px; font-size:0.75rem; font-weight:700; cursor:pointer;"\x3EPokaż całą trasę\x3C/button\x3E' +
+        '\x3C/div\x3E';
+    }
+
+    html += '\x3C/tbody\x3E\x3C/table\x3E' + hiddenNoticeHtml + '\x3C/div\x3E';
 
     window._currentRouteStationsWithGps = routeCoords;
     const ormSec = document.getElementById('openRailwayMapSection');
@@ -3544,6 +4175,26 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
     mainBox.className = 'bg-train';
     mainBox.innerText = "POCIĄG - " + escapeHTML(pociag.nazwa || '') + " (" + escapeHTML(pociag.numer) + ")";
     listContainer.style.display = 'block';
+
+    window.ensureFloatingMiniHud();
+
+    // Inicjalna aktualizacja Hero HUD i widgetu blokady ekranu (MediaSession)
+    const initTargetIdx = (typeof window._crewDutyStartIdx === 'number') ? window._crewDutyStartIdx : 0;
+    const initStObj = stacjeArray[initTargetIdx] || {};
+    const initSchedArr = (initStObj && initStObj.przyjazd && initStObj.przyjazd !== '-') ? initStObj.przyjazd : (initStObj ? initStObj.odjazd : '');
+    const initDelayedArr = (window._trainDelayMinutes > 0 && initSchedArr) ? addMinutesToHHMM(initSchedArr, window._trainDelayMinutes) : initSchedArr;
+    window.updateNextStationHud({
+        index: initTargetIdx,
+        name: stationNamesUpper[initTargetIdx] || '',
+        distKm: null,
+        distStr: '-- km',
+        isStationStop: false,
+        etaStr: initDelayedArr ? ('Plan. ' + initDelayedArr) : '--:--',
+        schedArr: initSchedArr,
+        delayedArr: initDelayedArr,
+        isHandover: (initTargetIdx === window._crewDutyEndIdx),
+        tag: window.getStationTag(initTargetIdx)
+    });
 
     // AUTOMATYCZNE URUCHOMIENIE CZUWAKA GPS DLA WYBRANEGO POCIĄGU (DOPÓKI ODCINEK OBSŁUGI TRWA)
     if (!window._crewDutyCompleted) {
@@ -3853,6 +4504,25 @@ window.locateTrainByGPS = async (silent = false) => {
                     window._currentStandingStationIdx = null;
                 }
 
+                // Aktualizuj Hero HUD i widget MediaSession
+                const stObjAtStation = (window._currentTrainObject && window._currentTrainObject.stacje)
+                    ? (Array.isArray(window._currentTrainObject.stacje) ? window._currentTrainObject.stacje[closestRowIndex] : Object.values(window._currentTrainObject.stacje)[closestRowIndex])
+                    : null;
+                const schedArrStation = (stObjAtStation && stObjAtStation.przyjazd && stObjAtStation.przyjazd !== '-') ? stObjAtStation.przyjazd : (stObjAtStation ? stObjAtStation.odjazd : '');
+                const delayedArrStation = (window._trainDelayMinutes > 0 && schedArrStation) ? addMinutesToHHMM(schedArrStation, window._trainDelayMinutes) : schedArrStation;
+                window.updateNextStationHud({
+                    index: closestRowIndex,
+                    name: stationName,
+                    distKm: minDistance,
+                    distStr: '~' + (minDistance * 1000).toFixed(0) + ' m',
+                    isStationStop: true,
+                    etaStr: (currentSpeedKmH < 5) ? 'Postój na stacji' : 'Zbliżanie / Odjazd',
+                    schedArr: schedArrStation,
+                    delayedArr: delayedArrStation,
+                    isHandover: (typeof window._crewDutyEndIdx === 'number' && closestRowIndex === window._crewDutyEndIdx),
+                    tag: window.getStationTag(closestRowIndex)
+                });
+
                 const stLog = (window._stationActualLog && window._stationActualLog[closestRowIndex]) ? window._stationActualLog[closestRowIndex] : null;
                 const stopTimeInfo = (stLog && stLog.actualArr) ? (' \u2022 Postój: ' + stLog.actualArr) : '';
 
@@ -4074,6 +4744,35 @@ window.locateTrainByGPS = async (silent = false) => {
                 if (typeof window.updateOrmLiveTrainPosition === 'function') {
                     window.updateOrmLiveTrainPosition(userLat, userLng, segEnd);
                 }
+
+                // Aktualizuj Hero HUD i widget MediaSession na szlaku
+                const stEndObj = (window._currentTrainObject && window._currentTrainObject.stacje)
+                    ? (Array.isArray(window._currentTrainObject.stacje) ? window._currentTrainObject.stacje[segEnd.index] : Object.values(window._currentTrainObject.stacje)[segEnd.index])
+                    : null;
+                const schedArrEnd = (stEndObj && stEndObj.przyjazd && stEndObj.przyjazd !== '-') ? stEndObj.przyjazd : (stEndObj ? stEndObj.odjazd : '');
+                const delayedArrEnd = (window._trainDelayMinutes > 0 && schedArrEnd) ? addMinutesToHHMM(schedArrEnd, window._trainDelayMinutes) : schedArrEnd;
+                let etaDisplay = '';
+                if (currentSpeedKmH >= 15 && segEnd.distance > 0) {
+                    const minsToStation = Math.round((segEnd.distance / currentSpeedKmH) * 60);
+                    const etaDate = new Date(Date.now() + minsToStation * 60000);
+                    const pad = (n) => String(n).padStart(2, '0');
+                    etaDisplay = 'ETA ' + pad(etaDate.getHours()) + ':' + pad(etaDate.getMinutes()) + ' (~' + minsToStation + ' min)';
+                } else if (delayedArrEnd) {
+                    etaDisplay = 'Plan. ' + delayedArrEnd;
+                }
+
+                window.updateNextStationHud({
+                    index: segEnd.index,
+                    name: segEnd.name,
+                    distKm: segEnd.distance,
+                    distStr: '~' + segEnd.distance.toFixed(1) + ' km',
+                    isStationStop: false,
+                    etaStr: etaDisplay,
+                    schedArr: schedArrEnd,
+                    delayedArr: delayedArrEnd,
+                    isHandover: (typeof window._crewDutyEndIdx === 'number' && segEnd.index === window._crewDutyEndIdx),
+                    tag: window.getStationTag(segEnd.index)
+                });
 
                 // --- POWIADOMIENIE Z DŹWIĘKIEM NA WYBRANĄ LICZBĘ KM PRZED STACJĄ DOCELOWĄ (TYLKO W ODCINKU OBSŁUGI DK!) ---
                 const isWithinCrewDuty = (segEnd.index > window._crewDutyStartIdx && segEnd.index <= window._crewDutyEndIdx);
@@ -4300,6 +4999,34 @@ window.locateTrainByGPS = async (silent = false) => {
                 const estLng = st.segStart.lng + (st.segEnd.lng - st.segStart.lng) * progressFrac;
                 window.updateOrmLiveTrainPosition(estLat, estLng, st.segEnd);
             }
+
+            // Aktualizuj Hero HUD i widget MediaSession dla estymacji tunelowej
+            const endIdx = st.segEnd.index;
+            const stEndObj = (window._currentTrainObject && window._currentTrainObject.stacje)
+                ? (Array.isArray(window._currentTrainObject.stacje) ? window._currentTrainObject.stacje[endIdx] : Object.values(window._currentTrainObject.stacje)[endIdx])
+                : null;
+            const schedArrTunnel = (stEndObj && stEndObj.przyjazd && stEndObj.przyjazd !== '-') ? stEndObj.przyjazd : (stEndObj ? stEndObj.odjazd : '');
+            const delayedArrTunnel = (window._trainDelayMinutes > 0 && schedArrTunnel) ? addMinutesToHHMM(schedArrTunnel, window._trainDelayMinutes) : schedArrTunnel;
+            let etaTunnelDisplay = '';
+            if (tunnelSpeedKmH >= 15 && estRemainingKm > 0) {
+                const minsLeft = Math.round((estRemainingKm / tunnelSpeedKmH) * 60);
+                const etaDate = new Date(Date.now() + minsLeft * 60000);
+                const pad = (n) => String(n).padStart(2, '0');
+                etaTunnelDisplay = 'ETA ' + pad(etaDate.getHours()) + ':' + pad(etaDate.getMinutes()) + ' [tunel]';
+            }
+
+            window.updateNextStationHud({
+                index: endIdx,
+                name: st.segEnd.name,
+                distKm: estRemainingKm,
+                distStr: '~' + estRemainingKm.toFixed(1) + ' km [tunel]',
+                isStationStop: false,
+                etaStr: etaTunnelDisplay,
+                schedArr: schedArrTunnel,
+                delayedArr: delayedArrTunnel,
+                isHandover: (typeof window._crewDutyEndIdx === 'number' && endIdx === window._crewDutyEndIdx),
+                tag: window.getStationTag(endIdx)
+            });
 
             const isWithinCrewDuty = (st.segEnd.index > window._crewDutyStartIdx && st.segEnd.index <= window._crewDutyEndIdx);
             const configuredAlertKm = window.getAlertDistanceKm();

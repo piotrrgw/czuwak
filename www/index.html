@@ -5,7 +5,7 @@
       (function() {
         var pref = localStorage.getItem('CZUWAK_THEME_PREFERENCE');
         var theme = 'dark';
-        if (pref === 'dark' || pref === 'light') {
+        if (pref === 'dark' || pref === 'light' || pref === 'oled') {
           theme = pref;
         } else {
           try {
@@ -459,6 +459,14 @@
 
                 <div class="menu-btn-group" style="margin-bottom: 0;">
                     <div class="menu-btn-group-label">Wygląd, aktualizacja APK i diagnostyka</div>
+                    <button id="btnToggleOledTheme" class="menu-btn menu-btn-secondary" onclick="window.cycleTheme()">
+                        <span class="material-symbols-outlined" id="menuThemeIcon">nightlight</span>
+                        <span id="menuThemeLabel">Motyw: Ciemny / OLED / Jasny</span>
+                    </button>
+                    <button id="btnToggleAutoDelay" class="menu-btn menu-btn-secondary" onclick="window.toggleAutoDelayEnabled()">
+                        <span class="material-symbols-outlined" id="menuAutoDelayIcon" style="color:var(--primary);">auto_mode</span>
+                        <span id="menuAutoDelayLabel">Auto-obliczanie opóźnień z GPS: WŁĄCZONE</span>
+                    </button>
                     <button id="btnResetTheme" class="menu-btn menu-btn-secondary" onclick="window.resetThemeToAuto()">
                         <span class="material-symbols-outlined">brightness_auto</span> Motyw: Przywróć systemowy (Auto)
                     </button>
@@ -470,6 +478,7 @@
                     </button>
                 </div>
             </div>
+
                          
             <div class="menu-section">
                 <h3><span class="material-symbols-outlined">menu_book</span> Jak działa Czuwak?</h3>
