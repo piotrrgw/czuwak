@@ -2234,8 +2234,12 @@ window.closeActiveTrainAndSleep = () => {
     window._lastTrainGpsFix = null;
     window._crewDutyCompleted = false;
     window._stationActualLog = {};
+    window._trainDelayMinutes = 0;
 
     try {
+        if (window._currentActiveTrainNumber) {
+            localStorage.removeItem('CZUWAK_TRAIN_DELAY_' + window._currentActiveTrainNumber);
+        }
         localStorage.removeItem('CZUWAK_CONFIRMED_TRAIN_NUM');
         localStorage.removeItem('CZUWAK_LAST_TRAIN_NUM');
         localStorage.removeItem('CZUWAK_LAST_TRAIN_NAME');
@@ -2587,6 +2591,61 @@ function formatNowHHMMSS() {
            String(d.getMinutes()).padStart(2, '0') + ':' +
            String(d.getSeconds()).padStart(2, '0');
 }
+
+window._trainDelayMinutes = 0;
+
+function addMinutesToHHMM(hhmmStr, extraMinutes) {
+    if (!hhmmStr || hhmmStr === '-' || !hhmmStr.includes(':')) return null;
+    const parts = hhmmStr.split(':');
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (isNaN(h) || isNaN(m)) return null;
+    const totalMin = ((h * 60 + m + Number(extraMinutes)) % 1440 + 1440) % 1440;
+    const newH = Math.floor(totalMin / 60);
+    const newM = totalMin % 60;
+    return String(newH).padStart(2, '0') + ':' + String(newM).padStart(2, '0');
+}
+
+window.setTrainDelay = (minutes) => {
+    let delay = parseInt(minutes, 10);
+    if (isNaN(delay) || delay < 0) delay = 0;
+    window._trainDelayMinutes = delay;
+
+    const trainNum = window._currentActiveTrainNumber || (window._currentTrainObject && window._currentTrainObject.numer) || '';
+    if (trainNum) {
+        try {
+            if (delay > 0) {
+                localStorage.setItem('CZUWAK_TRAIN_DELAY_' + trainNum, String(delay));
+            } else {
+                localStorage.removeItem('CZUWAK_TRAIN_DELAY_' + trainNum);
+            }
+        } catch (e) {}
+    }
+
+    if (window._currentTrainObject) {
+        generujWidokTrasy(
+            window._currentTrainObject,
+            document.getElementById('detailsList'),
+            document.getElementById('mainStatusBox'),
+            window._currentTrainBestMatch
+        );
+    }
+};
+
+window.promptSetTrainDelay = () => {
+    const cur = window._trainDelayMinutes || 0;
+    const input = prompt(
+        "Podaj bie\u017c\u0105ce op\u00f3\u017anienie poci\u0105gu w minutach (np. 15, 30, 45 lub 0 je\u015bli poci\u0105g jedzie planowo):",
+        String(cur)
+    );
+    if (input === null) return;
+    const parsed = parseInt(input.trim(), 10);
+    if (isNaN(parsed) || parsed < 0) {
+        window.setTrainDelay(0);
+    } else {
+        window.setTrainDelay(parsed);
+    }
+};
 
 function getActualTimesStorageKey() {
     const trNum = window._currentActiveTrainNumber || 'TR';
@@ -3217,6 +3276,27 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
         window.collapseTrainConfigPanel();
     }
 
+    let savedDelay = 0;
+    if (cleanTrainNum) {
+        try {
+            const rawDelay = localStorage.getItem('CZUWAK_TRAIN_DELAY_' + cleanTrainNum);
+            if (rawDelay) savedDelay = Math.max(0, parseInt(rawDelay, 10) || 0);
+        } catch (e) {}
+    }
+    window._trainDelayMinutes = savedDelay;
+
+    const delayBadgeHtml = '\x3Cdiv style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;"\x3E' +
+        '\x3Cspan style="font-size:0.78rem; color:var(--text-muted); font-weight:700;"\x3EOpóźnienie:\x3C/span\x3E' +
+        '\x3Cbutton type="button" onclick="window.promptSetTrainDelay()" style="padding:3px 9px; border-radius:6px; border:1px solid ' + (window._trainDelayMinutes > 0 ? '#f59e0b' : 'var(--glass-border)') + '; background:' + (window._trainDelayMinutes > 0 ? 'rgba(245, 158, 11, 0.22)' : 'rgba(255, 255, 255, 0.06)') + '; color:' + (window._trainDelayMinutes > 0 ? '#fbbf24' : 'var(--text)') + '; font-weight:800; font-size:0.75rem; cursor:pointer; display:inline-flex; align-items:center; gap:4px;" title="Kliknij, aby ustawić bieżące opóźnienie pociągu"\x3E' +
+            '\x3Cspan class="material-symbols-outlined" style="font-size:0.9rem;"\x3Eschedule\x3C/span\x3E ' +
+            (window._trainDelayMinutes > 0 ? ('+' + window._trainDelayMinutes + ' min') : 'Planowo (0 min)') +
+            '\x3Cspan class="material-symbols-outlined" style="font-size:0.8rem; opacity:0.7;"\x3Eedit\x3C/span\x3E' +
+        '\x3C/button\x3E' +
+        (window._trainDelayMinutes > 0
+            ? ('\x3Cbutton type="button" onclick="window.setTrainDelay(0)" style="padding:3px 7px; border-radius:5px; border:1px solid rgba(239, 68, 68, 0.4); background:rgba(239, 68, 68, 0.12); color:#f87171; font-size:0.7rem; font-weight:700; cursor:pointer;" title="Skasuj opóźnienie (0 min)"\x3EKasuj\x3C/button\x3E')
+            : '') +
+    '\x3C/div\x3E';
+
     const dutyStatusHeaderHtml = window._crewDutyCompleted
         ? ('\x3Cdiv id="crewDutyStatusHeader" style="background: rgba(34, 197, 94, 0.16); border-bottom: 1.5px solid #22c55e; padding: 10px 15px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;"\x3E' +
                '\x3Cdiv style="display:flex; align-items:center; gap:8px; color:#4ade80; font-weight:800; font-size:0.88rem;"\x3E' +
@@ -3244,6 +3324,7 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
                '\x3C/div\x3E' +
                '\x3Cdiv style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; font-size:0.8rem; color:var(--text-muted); padding-top:4px; border-top:1px dashed var(--glass-border);"\x3E' +
                    '\x3Cspan\x3EOdcinek DK: \x3Cstrong style="color:#22c55e;"\x3E' + escapeHTML(crewStartStationName) + '\x3C/strong\x3E \u2192 \x3Cstrong style="color:#f59e0b;"\x3E' + escapeHTML(window._crewDutyEndStationName) + '\x3C/strong\x3E (auto-wyłączenie)\x3C/span\x3E' +
+                   delayBadgeHtml +
                '\x3C/div\x3E' +
            '\x3C/div\x3E');
 
@@ -3271,7 +3352,7 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
     const stationsList = window._cachedStationList || [];
     const routeCoords = [];
 
-    const relNow = bestMatch ? bestMatch.relNow : null;
+    const relNow = (bestMatch && bestMatch.relNow !== null) ? (bestMatch.relNow - window._trainDelayMinutes) : null;
     let activeStationIndex = -1;
     let activeBetweenIndex = -1;
 
@@ -3364,12 +3445,22 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
         let arrCellHtml = '\x3Cdiv\x3E' + escapeHTML(arrStr) + '\x3C/div\x3E';
         if (stAbs.onlyBoarding) {
             arrCellHtml = '-\x3Cdiv style="font-size: 0.7rem; color: var(--primary); font-weight: 600; line-height: 1.15; margin-top: 2px;"\x3ETylko wsiadanie\x3C/div\x3E';
+        } else if (window._trainDelayMinutes > 0) {
+            const delayedArrStr = addMinutesToHHMM(arrStr, window._trainDelayMinutes);
+            if (delayedArrStr) {
+                arrCellHtml += '\x3Cdiv class="delay-forecast-badge" title="Prognozowany przyjazd z uwzględnieniem +' + window._trainDelayMinutes + ' min opóźnienia"\x3E\x3Cspan class="material-symbols-outlined" style="font-size:0.75rem;"\x3Eschedule\x3C/span\x3E ' + escapeHTML(delayedArrStr) + '\x3C/div\x3E';
+            }
         }
         arrCellHtml += '\x3Cdiv id="actualArrBox_' + idx + '"\x3E' + actualArrHtml + '\x3C/div\x3E';
 
         let depCellHtml = '\x3Cdiv\x3E' + escapeHTML(depStr) + '\x3C/div\x3E';
         if (stAbs.onlyAlighting) {
             depCellHtml = '-\x3Cdiv style="font-size: 0.7rem; color: var(--warning, #f59e0b); font-weight: 600; line-height: 1.15; margin-top: 2px;"\x3ETylko wysiadanie (~1m)\x3C/div\x3E';
+        } else if (window._trainDelayMinutes > 0) {
+            const delayedDepStr = addMinutesToHHMM(depStr, window._trainDelayMinutes);
+            if (delayedDepStr) {
+                depCellHtml += '\x3Cdiv class="delay-forecast-badge" title="Prognozowany odjazd z uwzględnieniem +' + window._trainDelayMinutes + ' min opóźnienia"\x3E\x3Cspan class="material-symbols-outlined" style="font-size:0.75rem;"\x3Eschedule\x3C/span\x3E ' + escapeHTML(delayedDepStr) + '\x3C/div\x3E';
+            }
         }
         depCellHtml += '\x3Cdiv id="actualDepBox_' + idx + '"\x3E' + actualDepHtml + '\x3C/div\x3E';
 
@@ -3838,7 +3929,7 @@ window.locateTrainByGPS = async (silent = false) => {
                 });
 
                 const nowD = new Date();
-                let relMinutesNow = nowD.getHours() * 60 + nowD.getMinutes();
+                let relMinutesNow = nowD.getHours() * 60 + nowD.getMinutes() - (window._trainDelayMinutes || 0);
                 if (window._currentTrainBestMatch && typeof window._currentTrainBestMatch.daysAgo === 'number') {
                     relMinutesNow += window._currentTrainBestMatch.daysAgo * 1440;
                 }
@@ -4142,20 +4233,9 @@ window.locateTrainByGPS = async (silent = false) => {
             return;
         }
 
-        // Sprawdzenie, czy nie minęło >45 minut od planowego przyjazdu do stacji zmiany DK (gdy pracownik wysiadł i zapomniał wyłączyć)
-        const nowD = new Date();
-        let relMinutesNow = nowD.getHours() * 60 + nowD.getMinutes();
-        if (window._currentTrainBestMatch && typeof window._currentTrainBestMatch.daysAgo === 'number') {
-            relMinutesNow += window._currentTrainBestMatch.daysAgo * 1440;
-        }
-        const dutyEndRow = document.querySelector('.train-route-table tr[data-station-idx="' + window._crewDutyEndIdx + '"]');
-        if (dutyEndRow && dutyEndRow.dataset.absArr !== undefined) {
-            const endArrMin = parseInt(dutyEndRow.dataset.absArr, 10);
-            if (!isNaN(endArrMin) && relMinutesNow > (endArrMin + 45)) {
-                window.completeCrewDutyAndStopCzuwak(window._crewDutyEndStationName, 'Upłynęło 45 min po planowym przyjeździe do stacji zmiany DK');
-                return;
-            }
-        }
+        // UWAGA: Nie wyłączamy Czuwaka ani nie odhaczamy stacji zmiany DK na podstawie rozkładowego czasu przyjazdu!
+        // Pociągi mogą mieć opóźnienia, a wyłączenie stacji zmiany DK następuje wyłącznie po fizycznym zatrzymaniu
+        // pociągu na stacji (odległość <= 300m i prędkość < 5km/h), oddaleniu się (> 18 km) lub po ręcznym kliknięciu przez drużynę.
 
         if (!window._lastValidGpsTimestamp) return;
         const secSinceLastFix = Math.round((Date.now() - window._lastValidGpsTimestamp) / 1000);
