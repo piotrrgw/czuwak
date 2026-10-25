@@ -1,0 +1,84 @@
+apply plugin: 'com.android.application'
+
+def envFile = file('../../www/env.js')
+def parsedVersionName = "1.0.0"
+def parsedVersionCode = 1
+if (envFile.exists()) {
+    def envText = envFile.getText('UTF-8')
+    def verMatcher = (envText =~ /APP_VERSION\s*=\s*"v?([^"]+)"/)
+    if (verMatcher.find()) {
+        parsedVersionName = verMatcher.group(1)
+    }
+    def buildMatcher = (envText =~ /APP_BUILD\s*=\s*"0*([0-9]+)"/)
+    if (buildMatcher.find()) {
+        parsedVersionCode = Integer.parseInt(buildMatcher.group(1))
+    }
+}
+
+android {
+    namespace "pl.pkp.czuwak"
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "pl.pkp.czuwak"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode parsedVersionCode
+        versionName parsedVersionName
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            def ksFile = file('czuwak-release.keystore')
+            def ksPass = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            if (ksFile.exists() && ksPass) {
+                storeFile ksFile
+                storePassword ksPass
+                keyAlias 'czuwak'
+                keyPassword ksPass
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (file('czuwak-release.keystore').exists() && System.getenv("ANDROID_KEYSTORE_PASSWORD")) {
+                signingConfig signingConfigs.release
+            }
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

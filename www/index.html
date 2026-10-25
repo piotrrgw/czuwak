@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="pl" data-theme="dark">
+<head>
+    <script>
+      (function() {
+        var pref = localStorage.getItem('CZUWAK_THEME_PREFERENCE');
+        var theme = 'dark';
+        if (pref === 'dark' || pref === 'light') {
+          theme = pref;
+        } else {
+          try {
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+              theme = 'dark';
+            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+              theme = 'light';
+            } else {
+              theme = 'dark';
+            }
+          } catch(e) {
+            theme = 'dark';
+          }
+        }
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
+    <meta name="color-scheme" content="dark light">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <title>Czuwak – Asystent Drużyn Konduktorskich</title>
+    <meta name="description" content="System powiadamiania drużyn konduktorskich (DK) o zbliżaniu się do stacji na trasie pociągu (6 km przed wjazdem)." />
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="favicon-ic.svg">
+    <link rel="icon" type="image/png" href="apple-touch-icon.png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <link rel="stylesheet" href="css/index.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+</head>
+<body>
+    <!-- Global Progress Bar -->
+    <div id="global-progress-bar" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 4px; background: var(--glass-border); z-index: 99999;">
+        <div style="height: 100%; background: var(--primary); width: 30%; animation: indeterminateProgress 1.5s infinite linear;"></div>
+    </div>
+    <style>
+        @keyframes indeterminateProgress {
+            0% { transform: translateX(-100%); width: 30%; }
+            50% { width: 50%; }
+            100% { transform: translateX(400%); width: 30%; }
+        }
+    </style>
+         
+    <!-- BOCZNE MENU (Wysuwane) -->
+    <div id="menuOverlay" class="menu-overlay">
+        <div class="menu-content">
+            <div class="menu-close" onclick="window.toggleMenu()">
+                <span class="material-symbols-outlined icon-lg">close</span>
+            </div>
+                        
+            <div class="menu-section">
+                <h3 style="justify-content: space-between; width: 100%;">
+                    <span style="display: flex; align-items: center; gap: 6px;"><span class="material-symbols-outlined">bar_chart</span> Statystyki bazy</span>
+                    <button id="btnCheckUpdates" onclick="window.checkUpdatesManually()" style="margin:0; padding:6px 12px; font-size:0.8rem; background:transparent; border:1px solid var(--primary); color:var(--primary); font-weight:bold; min-height:44px; display:inline-flex; align-items:center; justify-content:center; gap:4px; border-radius:8px; cursor:pointer; transition:all 0.2s;">
+                        <span class="material-symbols-outlined" style="font-size:1.1rem;">cloud_sync</span> Sprawdź
+                    </button>
+                </h3>
+                <ul class="stats-list">
+                    <li><span class="stat-label">Wersja aplikacji:</span> <span id="stat_app_version" class="stat-val">v1.0.0 (001)</span></li>
+                    <li><span class="stat-label">Sync. stacji:</span> <span id="stat_stations_sync" class="stat-val">Brak</span></li>
+                    <li><span class="stat-label">Tryb stacji:</span> <span id="stat_stations_expires" class="stat-val">Publikacja LOUD</span></li>
+                    <li><span class="stat-label">Sync. pociągów:</span> <span id="stat_trains_sync" class="stat-val">Brak</span></li>
+                    <li><span class="stat-label">Waż. poc.:</span> <span id="stat_trains_expires" class="stat-val">Brak</span></li>
+                    <li><span class="stat-label">Stacje z GPS:</span> <span id="stat_stations" class="stat-val">0</span></li>
+                    <li><span class="stat-label">Ilość pociągów:</span> <span id="stat_trains" class="stat-val">0</span></li>
+                    <li><span class="stat-label">Pamięć Cache:</span> <span id="stat_storage" class="stat-val">0 KB</span></li>
+                </ul>
+            </div>
+                         
+            <div class="menu-section">
+                <h3><span class="material-symbols-outlined">settings</span> Opcje Czuwaka</h3>
+                
+                <div class="menu-btn-group">
+                    <div class="menu-btn-group-label">Synchronizacja baz danych</div>
+                    <button id="btnRefreshAll" class="menu-btn menu-btn-primary" onclick="window.pobierzDane('all', true)">
+                        <span class="material-symbols-outlined">cloud_sync</span> Synchronizuj wszystko
+                    </button>
+                    <button id="btnRefreshPociagi" class="menu-btn menu-btn-secondary" onclick="window.pobierzDane('pociagi', true)">
+                        <span class="material-symbols-outlined">train</span> Odśwież rozkłady pociągów
+                    </button>
+                    <button id="btnRefreshStacje" class="menu-btn menu-btn-secondary" onclick="window.pobierzDane('stacje', true)">
+                        <span class="material-symbols-outlined">map</span> Odśwież słownik stacji GPS
+                    </button>
+                </div>
+
+                <div class="menu-btn-group">
+                    <div class="menu-btn-group-label">Powiadomienia i dźwięk</div>
+                    <button id="btnToggleStationAlerts" class="menu-btn menu-btn-secondary" onclick="window.toggleStationApproachAlerts()">
+                        <span class="material-symbols-outlined" id="stationAlertsIcon" style="color:var(--open);">notifications_active</span> 
+                        <span id="stationAlertsLabel">Alarm stacyjny (6 km): WŁĄCZONY</span>
+                    </button>
+                    <button class="menu-btn menu-btn-secondary" onclick="window.testStationAlert()">
+                        <span class="material-symbols-outlined" style="color:var(--primary);">volume_up</span> Przetestuj gong i komunikat (6 km)
+                    </button>
+                    <button id="btnResetTheme" class="menu-btn menu-btn-secondary" onclick="window.resetThemeToAuto()">
+                        <span class="material-symbols-outlined">brightness_auto</span> Motyw: Przywróć systemowy (Auto)
+                    </button>
+                </div>
+
+                <div class="menu-btn-group" style="margin-bottom: 0;">
+                    <div class="menu-btn-group-label">Aktualizacja APK i diagnostyka</div>
+                    <button id="btnCheckApkUpdate" class="menu-btn menu-btn-secondary" onclick="window.checkAppUpdate(true)">
+                        <span class="material-symbols-outlined" style="color:var(--open);">system_update</span> Sprawdź aktualizację aplikacji (.apk)
+                    </button>
+                    <button class="menu-btn menu-btn-danger" onclick="window.hardReinstall()">
+                        <span class="material-symbols-outlined">build</span> Twardy Reinstall (Wyczyść pamięć)
+                    </button>
+                </div>
+            </div>
+                         
+            <div class="menu-section">
+                <h3><span class="material-symbols-outlined">menu_book</span> Jak działa Czuwak?</h3>
+                <ul style="margin-top: 0; padding-left: 18px; font-size: 0.88rem; color: var(--text-muted); line-height: 1.55; margin-bottom: 0;">
+                    <li><strong>1. Wybierz swój pociąg:</strong> Wpisz numer (np. <em>13100</em>) lub nazwę pociągu. System automatycznie dobierze właściwy dzień kursowania (w tym pociągi nocne w trasie z poprzedniej doby).</li>
+                    <li><strong>2. Włącz śledzenie GPS:</strong> Kliknij pływający przycisk <strong>Celownika (GPS)</strong> w prawym dolnym rogu ekranu.</li>
+                    <li><strong>3. Alarm na 6 km przed stacją:</strong> Gdy pociąg zbliży się na odległość <strong>6 km</strong> przed wjazdem do kolejnej stacji (lub 50% długości szlaku dla krótszych odcinków), Czuwak uruchomi:
+                        <br>• Dwukrotny akustyczny gong PKP (<em>Bim-Bam... Bim-Bam</em>) ze 100% głośnością,
+                        <br>• Wibrację telefonu,
+                        <br>• Powiadomienie systemowe Android oraz baner z odliczaniem kilometrów na żywo i przypomnieniem o <strong>wygłoszeniu komunikatu pożegnalnego</strong>.
+                    </li>
+                    <li><strong>4. Praca Offline:</strong> Rozkłady pociągów pobierane są automatycznie co <strong>24–48h</strong>, a baza współrzędnych GPS stacji aktualizowana jest po wykryciu publikacji <em>LOUD</em>. W czasie jazdy połączenie z internetem nie jest wymagane.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- GŁÓWNY INTERFEJS APLIKACJI -->
+    <div class="container">
+        <div class="header-wrapper">
+            <h1><img src="favicon-ic.svg" alt="Logo" class="header-favicon" width="32" height="32"> Czuwak</h1>
+            <div class="header-controls">
+                <button class="burger-btn" onclick="window.changeFontSize(-2)" aria-label="Zmniejsz tekst">
+                    <span class="material-symbols-outlined">text_decrease</span>
+                </button>
+                <button class="burger-btn" onclick="window.changeFontSize(2)" aria-label="Powiększ tekst">
+                    <span class="material-symbols-outlined">text_increase</span>
+                </button>
+                <button class="burger-btn" id="theme-toggle" aria-label="Przełącz motyw widoku">
+                    <span class="material-symbols-outlined" id="themeIcon">light_mode</span>
+                </button>
+                <button class="burger-btn" onclick="window.toggleMenu()" aria-label="Otwórz menu">
+                    <span class="material-symbols-outlined">menu</span>
+                </button>
+            </div>
+        </div>
+                 
+        <!-- BANER AKTUALIZACJI APLIKACJI APK (BEZ SKLEPU PLAY) -->
+        <div id="updateBanner" onclick="window.downloadAppUpdate()" style="display: none; background: linear-gradient(135deg, #0284c7, #2563eb); color: white; text-align: center; padding: 12px 14px; font-size: 0.94rem; font-weight: bold; justify-content: center; align-items: center; gap: 8px; cursor: pointer; border-radius: 10px; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);">
+            <span class="material-symbols-outlined icon-sm">system_update</span>
+            <span id="updateBannerText">Dostępna nowa wersja Czuwaka! Kliknij, aby pobrać i zainstalować (.apk)</span>
+        </div>
+
+        <!-- INTELIGENTNY BANER AKTUALIZACJI BAZ DANYCH -->
+        <div id="dbUpdateBanner" style="display: none; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; text-align: center; padding: 12px; font-size: 0.95rem; font-weight: bold; justify-content: center; align-items: center; gap: 8px; cursor: pointer; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        </div>
+
+        <!-- BANER AKTUALIZACJI W TLE -->
+        <div id="bgSyncBanner" style="display: none; flex-direction: column; gap: 8px; padding: 12px 15px; border-radius: 12px; margin-bottom: 15px; background: var(--break-bg-subtle); border: 1.5px solid var(--break); color: var(--text); box-shadow: var(--shadow); transition: all 0.3s ease;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 0.94rem; color: var(--break);" id="bgSyncBannerHeader">
+                    <span class="material-symbols-outlined spin icon-sm" id="bgSyncBannerIcon">sync</span>
+                    <span id="bgSyncBannerTitle">Aktualizacja baz w tle...</span>
+                </div>
+                <span id="bgSyncBannerPct" style="font-weight: 900; font-size: 0.95rem; color: var(--break); font-variant-numeric: tabular-nums;">0%</span>
+            </div>
+            <div id="bgSyncBannerDesc" style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.4;">
+                Prezentowane rozkłady pochodzą z pamięci podręcznej do czasu zakończenia pobierania.
+            </div>
+            <div style="width: 100%; height: 6px; background: rgba(0,0,0,0.15); border-radius: 999px; overflow: hidden;">
+                <div id="bgSyncBannerBar" style="width: 0%; height: 100%; background: var(--break); transition: width 0.2s ease;"></div>
+            </div>
+        </div>
+
+        <div class="top-info-bar">
+            <div class="status-row">
+                <span id="networkStatus" class="msg-offline">Sprawdzanie chmury...</span>
+                <span id="syncTimestamp" class="sync-time">Brak danych w pamięci</span>
+            </div>
+            <div id="syncProgressContainer" style="display: none; width: 100%; height: 5px; background: var(--glass-border); border-radius: 3px; overflow: hidden; margin-top: 6px;">
+                <div id="syncProgressBar" style="width: 0%; height: 100%; background: var(--open); transition: width 0.2s ease;"></div>
+            </div>
+            <div id="dateBar" class="date-bar">Ładowanie zegara...</div>
+            <div id="partialSyncWarningBanner" style="display: none; margin-top: 10px;"></div>
+        </div>
+
+        <div class="controls glass-panel">
+            <div class="toggle-container" style="padding: 6px;">
+                <div id="tabTrain" class="toggle-btn active" onclick="window.switchMode('train')">
+                    <span class="material-symbols-outlined icon-sm">directions_transit</span> Pociąg
+                </div>
+                <div id="tabRecent" class="toggle-btn" onclick="window.switchMode('recent')">
+                    <span class="material-symbols-outlined icon-sm">history</span> Ostatnie (5)
+                </div>
+            </div>
+                         
+            <div id="searchTrainBox">
+                <div class="toggle-container" style="background: var(--input-bg); padding: 4px; margin-bottom: 10px;">
+                    <div id="subTabTrainNumber" class="toggle-btn active" onclick="window.switchTrainMode('number')" style="padding: 8px; font-size: 0.85rem;">
+                        <span class="material-symbols-outlined icon-sm">tag</span> Po numerze
+                    </div>
+                    <div id="subTabTrainName" class="toggle-btn" onclick="window.switchTrainMode('name')" style="padding: 8px; font-size: 0.85rem;">
+                        <span class="material-symbols-outlined icon-sm">abc</span> Po nazwie
+                    </div>
+                </div>
+                                 
+                <div id="trainSyncStatusBanner" style="display:none; margin-bottom: 12px;"></div>
+
+                <div id="trainNumberContainer">
+                    <label for="trainInput" style="display:block; margin-bottom:5px; font-weight:600;">Wpisz numer pociągu:</label>
+                    <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 5px;">
+                        <input type="text" inputmode="numeric" id="trainInput" list="trainsDictionary" placeholder="np. 13100 lub 3520..." oninput="window.triggerSearch()" style="flex: 1; margin-bottom: 0;">
+                        <button onclick="window.clearSearch('trainInput')" aria-label="Wyczyść" style="background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px; color: var(--text-muted); width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;">
+                            <span class="material-symbols-outlined icon-sm">close</span>
+                        </button>
+                    </div>
+                    <datalist id="trainsDictionary"></datalist>
+                </div>
+                                 
+                <div id="trainNameContainer" style="display:none;">
+                    <label for="trainNameInput" style="display:block; margin-bottom:5px; font-weight:600;">Wpisz lub wybierz nazwę pociągu:</label>
+                    <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 5px;">
+                        <input type="text" id="trainNameInput" list="trainNamesDictionary" placeholder="Zacznij wpisywać nazwę..." oninput="window.triggerSearch()" style="flex: 1; margin-bottom: 0;">
+                        <button onclick="window.clearSearch('trainNameInput')" aria-label="Wyczyść" style="background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px; color: var(--text-muted); width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;">
+                            <span class="material-symbols-outlined icon-sm">close</span>
+                        </button>
+                    </div>
+                    <datalist id="trainNamesDictionary"></datalist>
+                </div>
+            </div>
+
+            <!-- SEKCJA OSTATNIO UŻYWANE POCIĄGI -->
+            <div id="searchRecentBox" style="display:none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 4px;">
+                    <span id="recentSectionTitle" style="font-size: 0.82rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">5 ostatnich pociągów</span>
+                    <button type="button" onclick="window.clearRecentHistory()" style="background: transparent; border: none; color: var(--text-muted); font-size: 0.8rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 4px 6px;">
+                        <span class="material-symbols-outlined" style="font-size: 1.1rem;">delete_sweep</span> Wyczyść
+                    </button>
+                </div>
+                <div id="recentTrainsContainer"></div>
+            </div>
+        </div>
+
+        <div id="skeletonLoader" class="skeleton-wrapper">
+            <div class="skeleton-card">
+                <div class="skeleton-line title skeleton-loader"></div>
+                <div class="skeleton-line skeleton-loader"></div>
+            </div>
+        </div>
+        <div id="mainStatusBox">STATUS</div>
+        <div id="detailsList" class="details-container"></div>
+    </div>
+         
+    <!-- Pływające przyciski (FAB) -->
+    <div id="trainFabContainer" class="fab-container" style="display: none;">
+        <button class="fab-btn" id="fabTimeBtn" onclick="window.locateTrainByTime()" title="Lokalizuj wg rozkładu">
+            <span class="material-symbols-outlined">schedule</span>
+        </button>
+        <button class="fab-btn fab-gps" id="fabGpsBtn" onclick="window.locateTrainByGPS()" title="Czuwak GPS (alarm 6 km przed stacją)">
+            <span class="material-symbols-outlined">my_location</span>
+        </button>
+    </div>
+
+    <!-- Loader pociągu -->
+    <div id="trainLoaderOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--bg-gradient); z-index: 100000; flex-direction: column; justify-content: center; align-items: center; overflow: hidden; padding: 20px; text-align: center;">
+        <h2 style="color: var(--text-main); margin-bottom: 5px;">Synchronizacja Czuwaka...</h2>
+        <p id="trainLoaderSubtext" style="color: var(--text-muted); font-size: 0.92rem; margin: 0 0 12px 0;">Proszę czekać, pociąg przywozi nowe dane.</p>
+        <div id="trainProgressText" style="font-size: 2rem; font-weight: 900; color: var(--primary); margin-bottom: 30px; font-variant-numeric: tabular-nums;">0%</div>
+        <div class="train-container" id="train-dynamic-composition"></div>
+        <button type="button" id="btnMinimizeSync" onclick="window.minimizeSyncToBackground()" style="display: none; margin-top: 32px; padding: 12px 22px; min-height: 48px; max-width: 340px; width: 100%; border-radius: 10px; background: var(--glass-bg); border: 1.5px solid var(--primary); color: var(--primary); font-weight: 700; font-size: 0.95rem; cursor: pointer; align-items: center; justify-content: center; gap: 8px; box-shadow: var(--shadow); transition: all 0.2s ease;">
+            <span class="material-symbols-outlined icon-sm">open_in_full</span> Kontynuuj w tle (użyj obecnych danych)
+        </button>
+    </div>
+
+    <script src="js/train.js"></script>
+    <script src="env.js"></script>
+    <script type="module" src="js/index.js"></script>
+</body>
+</html>
