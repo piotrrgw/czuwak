@@ -1550,8 +1550,15 @@ window.updateStats = async () => {
 // ==========================================
 // MECHANIZM SAMODZIELNEJ AKTUALIZACJI APK (BEZ SKLEPU PLAY)
 // ==========================================
-const DEFAULT_APK_DOWNLOAD_URL = 'https://github.com/piotrrgw/czuwak/releases/latest/download/czuwak.apk';
+function getApkFileName(ver, build) {
+    const v = ver || window.APP_VERSION || 'v1.0.0';
+    const b = build || window.APP_BUILD || '1';
+    return 'czuwak(' + v + ')(' + b + ').apk';
+}
+
+const DEFAULT_APK_DOWNLOAD_URL = 'https://github.com/piotrrgw/czuwak/releases/latest/download/' + encodeURIComponent(window.APP_APK_NAME || getApkFileName());
 const REMOTE_ENV_JS_URL = 'https://raw.githubusercontent.com/piotrrgw/czuwak/main/www/env.js';
+window._latestApkFileName = window.APP_APK_NAME || getApkFileName();
 window._latestApkDownloadUrl = DEFAULT_APK_DOWNLOAD_URL;
 window._latestDetectedVersionLabel = null;
 
@@ -1571,13 +1578,15 @@ function parseVersionScore(versionStr, buildStr) {
 }
 
 window.downloadAppUpdate = function() {
-    const targetUrl = window._latestApkDownloadUrl || DEFAULT_APK_DOWNLOAD_URL;
+    const fileName = window._latestApkFileName || getApkFileName();
+    const targetUrl = window._latestApkDownloadUrl || ('https://github.com/piotrrgw/czuwak/releases/latest/download/' + encodeURIComponent(fileName));
     const verInfo = window._latestDetectedVersionLabel ? (' (' + window._latestDetectedVersionLabel + ')') : '';
-    const msg = 'Za chwilę rozpocznie się pobieranie pliku instalacyjnego czuwak.apk' + verInfo + '.\n\nPo pobraniu otwórz plik i kliknij "Aktualizuj" (wszystkie zapisane bazy pociągów i ustawienia zostaną zachowane).';
+    const msg = 'Za chwilę rozpocznie się pobieranie pliku instalacyjnego ' + fileName + verInfo + '.\n\nPo pobraniu otwórz plik i kliknij "Aktualizuj" (wszystkie zapisane bazy pociągów i ustawienia zostaną zachowane).';
     if (confirm(msg)) {
         try {
             const link = document.createElement('a');
             link.href = targetUrl;
+            link.download = fileName;
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
             document.body.appendChild(link);
@@ -1590,6 +1599,7 @@ window.downloadAppUpdate = function() {
 };
 
 window.renderForcedApkUpdateScreen = function(minVerStr, apkUrl) {
+    const fileName = window._latestApkFileName || getApkFileName(minVerStr);
     if (apkUrl) window._latestApkDownloadUrl = apkUrl;
     document.body.innerHTML =
         '\x3Cdiv style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; text-align:center; padding:30px; background:var(--bg-gradient); color:var(--text);"\x3E' +
@@ -1600,7 +1610,7 @@ window.renderForcedApkUpdateScreen = function(minVerStr, apkUrl) {
                 'Wymagana wersja minimalna: \x3Cstrong\x3E' + escapeHTML(minVerStr) + '\x3C/strong\x3E.' +
             '\x3C/p\x3E' +
             '\x3Cp style="font-size:0.9rem; color:var(--primary); margin-bottom:28px; max-width:440px;"\x3E' +
-                'Kliknij poniższy przycisk, aby pobrać nowy plik instalacyjny \x3Cstrong\x3Eczuwak.apk\x3C/strong\x3E i zainstalować nakładkę aktualizacyjną.' +
+                'Kliknij poniższy przycisk, aby pobrać nowy plik instalacyjny \x3Cstrong\x3E' + escapeHTML(fileName) + '\x3C/strong\x3E i zainstalować nakładkę aktualizacyjną.' +
             '\x3C/p\x3E' +
             '\x3Cbutton class="menu-btn menu-btn-primary" onclick="window.downloadAppUpdate()" style="max-width:340px; min-height:52px; font-size:1rem; justify-content:center;"\x3E' +
                 '\x3Cspan class="material-symbols-outlined"\x3Edownload\x3C/span\x3E Pobierz i zainstaluj aktualizację (.apk)' +
@@ -1644,6 +1654,13 @@ window.checkAppUpdate = async function(isManual = false, dbStatusData = null) {
         if (sysData) {
             if (sysData.czuwakApkUrl) {
                 window._latestApkDownloadUrl = sysData.czuwakApkUrl;
+                try {
+                    const uParts = sysData.czuwakApkUrl.split('/');
+                    const fName = uParts[uParts.length - 1].split('?')[0];
+                    if (fName.endsWith('.apk')) {
+                        window._latestApkFileName = decodeURIComponent(fName);
+                    }
+                } catch (e) {}
             }
             if (sysData.minCzuwakVersion) {
                 const minScore = parseVersionScore(sysData.minCzuwakVersion, '000');
@@ -1667,6 +1684,7 @@ window.checkAppUpdate = async function(isManual = false, dbStatusData = null) {
                 const envText = await resp.text();
                 const verMatch = envText.match(/APP_VERSION\s*=\s*"([^"]+)"/);
                 const buildMatch = envText.match(/APP_BUILD\s*=\s*"([^"]+)"/);
+                const apkNameMatch = envText.match(/APP_APK_NAME\s*=\s*"([^"]+)"/);
                 const remoteVer = verMatch ? verMatch[1] : null;
                 const remoteBuild = buildMatch ? buildMatch[1] : null;
                 if (remoteVer) {
@@ -1676,6 +1694,11 @@ window.checkAppUpdate = async function(isManual = false, dbStatusData = null) {
                     if (remBuildInt > curBuildInt || remoteScore > currentScore) {
                         foundNewer = true;
                         detectedLabel = remoteVer + (remoteBuild ? (' (kompilacja ' + remoteBuild + ')') : '');
+                        const remoteApkName = (apkNameMatch && apkNameMatch[1])
+                            ? apkNameMatch[1]
+                            : getApkFileName(remoteVer, remoteBuild);
+                        window._latestApkFileName = remoteApkName;
+                        window._latestApkDownloadUrl = 'https://github.com/piotrrgw/czuwak/releases/latest/download/' + encodeURIComponent(remoteApkName);
                     }
                 }
             }

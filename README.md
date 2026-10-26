@@ -64,11 +64,13 @@
 Aplikacja posiada wbudowany system samodzielnych aktualizacji over-the-air:
 1. **Stały klucz podpisu (`android/app/czuwak-release.keystore`):** Każda kompilacja `.apk` jest podpisywana tym samym certyfikatem, dzięki czemu Android pozwala zainstalować nową wersję bezpośrednio na obecną („Aktualizuj”) **bez odinstalowywania i bez utraty pobranych rozkładów czy ustawień**.
 2. **Automatyczne wydania GitHub Releases ([`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml)):**
-   - Po zmianie `APP_VERSION` / `APP_BUILD` w [`www/env.js`](www/env.js) i wypchnięciu kodu na gałąź `main`, GitHub Actions automatycznie buduje podpisany plik `czuwak.apk` i publikuje go pod stałym adresem:
-     `https://github.com/piotrrgw/czuwak/releases/latest/download/czuwak.apk`
+   - Po zmianie `APP_VERSION` / `APP_BUILD` w [`www/env.js`](www/env.js) i wypchnięciu kodu na gałąź `main`, GitHub Actions automatycznie buduje podpisany plik `.apk` i publikuje go w dwóch formatach:
+     - **Wersjonowany:** `czuwak(v1.2.0)(12).apk` (format: `czuwak(vX.X.X)(XX).apk`), dzięki czemu pobrane instalatory w folderze *Pobrane* na telefonie posiadają jednoznaczną identyfikację wersji i kompilacji.
+     - **Alias stały:** `czuwak.apk` (dla zachowania wstecznej kompatybilności ze stałymi odnośnikami).
+     - Bezpośredni link: `https://github.com/piotrrgw/czuwak/releases/latest/download/czuwak(v1.2.0)(12).apk` lub `https://github.com/piotrrgw/czuwak/releases/latest/download/czuwak.apk`.
 3. **Wykrywanie aktualizacji w aplikacji:**
    - Przy starcie (oraz po kliknięciu **„Sprawdź aktualizację aplikacji (.apk)”** w menu bocznym) Czuwak porównuje swoją wersję z plikiem `www/env.js` na GitHubie oraz opcjonalnymi polami w Firestore (`system/db_status`: `latestCzuwakVersion`, `minCzuwakVersion`, `czuwakApkUrl`).
-   - Gdy pojawi się nowsza wersja, wyświetla niebieski baner **„Dostępna nowa wersja Czuwaka! Kliknij, aby pobrać i zainstalować (.apk)”**, który jednym dotknięciem pobiera i uruchamia instalator aktualizacji.
+   - Gdy pojawi się nowsza wersja, wyświetla niebieski baner **„Dostępna nowa wersja Czuwaka! Kliknij, aby pobrać i zainstalować (.apk)”**, który pobiera plik z precyzyjną nazwą (np. `czuwak(v1.2.0)(12).apk`) i uruchamia instalator aktualizacji.
 
 ---
 
