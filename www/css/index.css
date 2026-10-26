@@ -1490,3 +1490,134 @@ th { color: var(--text-muted); width: 35%; font-weight: normal; }
 .actual-time-badge.editable:active {
     transform: scale(0.96);
 }
+
+/* Interaktywne komórki godzin przyjazdu/odjazdu w tabeli */
+.table-time-cell-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    padding: 4px 6px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    background: transparent;
+    transition: all 0.15s ease;
+    user-select: none;
+    width: 100%;
+    box-sizing: border-box;
+}
+.table-time-cell-btn:hover {
+    background: rgba(2, 132, 199, 0.08);
+    border-color: var(--glass-border);
+}
+.table-time-cell-btn:active {
+    transform: scale(0.97);
+    background: rgba(2, 132, 199, 0.15);
+}
+.time-plan-text {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.time-edit-hint {
+    font-size: 0.68rem;
+    color: var(--primary);
+    opacity: 0.75;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-top: 2px;
+}
+
+/* Baner blokady przeskoczenia stacji w Hero HUD */
+.hud-blocked-banner {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(245, 158, 11, 0.18);
+    border: 1.5px solid #f59e0b;
+    margin-top: 8px;
+    animation: pulseWarnBorder 1.5s infinite alternate;
+}
+@keyframes pulseWarnBorder {
+    from { border-color: #f59e0b; }
+    to { border-color: #ef4444; }
+}
+.hud-blocked-title {
+    font-size: 0.82rem;
+    font-weight: 900;
+    color: #fbbf24;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.hud-blocked-btn {
+    min-height: 44px;
+    background: #22c55e;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-weight: 900;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    box-shadow: 0 4px 10px rgba(34, 197, 94, 0.35);
+    transition: transform 0.15s ease;
+}
+.hud-blocked-btn:active {
+    transform: scale(0.97);
+}
+
+/* Dziennik diagnostyczny (Logi) */
+.diag-log-container {
+    max-height: 52vh;
+    overflow-y: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.74rem;
+    background: rgba(15, 23, 42, 0.95);
+    border-radius: 10px;
+    border: 1px solid var(--glass-border);
+    padding: 10px;
+    line-height: 1.45;
+}
+.diag-log-row {
+    padding: 5px 0;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.diag-log-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+}
+.diag-badge {
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+.diag-badge.gps { background: rgba(34, 197, 94, 0.25); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); }
+.diag-badge.station { background: rgba(56, 189, 248, 0.25); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); }
+.diag-badge.speed { background: rgba(168, 85, 247, 0.25); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); }
+.diag-badge.delay { background: rgba(245, 158, 11, 0.25); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+.diag-badge.warn { background: rgba(249, 115, 22, 0.25); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.4); }
+.diag-badge.error { background: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+.diag-badge.lifecycle { background: rgba(148, 163, 184, 0.25); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.4); }
+.diag-log-msg {
+    color: #e2e8f0;
+    word-break: break-word;
+}
