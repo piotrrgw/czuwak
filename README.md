@@ -33,10 +33,12 @@
 5. **Blokada przeskoczenia stacji i Bezpieczeństwo Szlaku:**
    - **Wstrzymanie automatycznego przejścia do kolejnej stacji:** Jeśli drużyna nie odhaczyła zatrzymania na planowej stacji postoju z odcinka DK, Czuwak blokuje przeskok Hero HUD oraz wskaźnika trasy.
    - **Baner ostrzegawczy z natychmiastowym odblokowaniem:** Wyróżniony baner w Hero HUD `BLOKADA PRZESKOKU: Nie odhaczono postoju na stacji...` z jednym przyciskiem `[✓ Odhacz i potwierdź postój]`, który natychmiastowo zdejmuje blokadę.
-6. **Płynne Śledzenie GPS i Ochrona Postoju:**
+6. **Płynne Śledzenie GPS, Ochrona Postoju i Praca przy Wygaszonym Ekranie:**
+   - **Natywny Serwis Pierwszoplanowy (`CzuwakForegroundService`):** Gwarantuje ciągłe śledzenie GPS i utrzymanie procesora (`PARTIAL_WAKE_LOCK`) na systemach Android 10–15 nawet po wygaszeniu ekranu i schowaniu telefonu do kieszeni.
+   - **Indeks stacji `O(1)` i różnicowa aktualizacja DOM:** Współrzędne stacji indeksowane są w strukturze `Map` w pamięci RAM, a wiersze trasy aktualizują DOM wyłącznie przy faktycznej zmianie dystansu ($\ge 0.1\text{ km}$), eliminując zbędne przeliczenia układu strony (*Layout Reflow*).
    - **Ciągły prędkościomierz jak w nawigacji:** Zastosowanie filtru wykładniczego (EMA) i bufora próbek GPS eliminuje skoki prędkości (0 ➔ 70 ➔ 0 km/h) oraz gwałtowne wahania.
    - **Ochrona przed fałszywym odjazdem na postoju:** Wyeliminowano przedwczesne oznaczanie odjazdu podczas chodzenia konduktora po składzie lub wahań satelitów (próg odjazdu podniesiony do 12 km/h z wymogiem potwierdzenia w 2 kolejnych pomiarach).
-   - **Inteligentny watchdog sygnału:** Wyeliminowano agresywne odpytywanie wież BTS w tle, zapobiegając fałszywym skokom współrzędnych o 1-2 km.
+   - **Inteligentny watchdog sygnału i debouncing wznowienia:** Wyeliminowano agresywne odpytywanie wież BTS w tle oraz podwójny restart GPS przy przywracaniu aplikacji z tła.
 7. **Dziennik Diagnostyczny Aplikacji (Offline Logs):**
    - Wbudowany lokalny rejestrator zdarzeń GPS, statusów stacji, kalkulacji prędkości i cyklu życia aplikacji (do 300 ostatnich zdarzeń w bazie `IndexedDB`).
    - Dostępny z menu bocznego z możliwością przeglądania, filtrowania kolorystycznego, kopiowania do schowka i eksportu do pliku tekstowego `.txt`.
@@ -45,7 +47,7 @@
      1. 🔔 **Gong peronowy PKP** – klasyczny dwukrotny gong stacyjny (Bim-Bam).
      2. 📡 **Radar Czuwaka** – nowoczesny, dynamiczny impuls sonaru pokładowego z echem.
      3. 🚂 **Trąbka pociągu** – wyrazisty akord syreny / sygnału baczność lokomotywy PKP.
-   - **Dźwięk własny z telefonu:** Możliwość załadowania dowolnego pliku dźwiękowego z pamięci urządzenia (mp3, wav, ogg) z natychmiastowym odsłuchem testowym i możliwością skasowania.
+   - **Dźwięk własny z telefonu (w `IndexedDB`):** Możliwość załadowania dowolnego pliku dźwiękowego z pamięci urządzenia (mp3, wav, ogg do 12 MB) przechowywanego asynchronicznie w `IndexedDB` (bez obciążania limitu 5 MB `localStorage`).
    - **Integracja z pętlą budzika i powiadomieniami:** Wybrany dźwięk jest automatycznie wykorzystywany w powiadomieniach jednokrotnych oraz w zapętlonym trybie budzika aż do potwierdzenia.
 9. **Ergonomia pracy drużyny konduktorskiej:**
    - **Filtr trasy:** Przełącznik `[Mój odcinek DK]` vs `[Cała trasa]` umożliwiający natychmiastowe ukrycie stacji spoza bieżącej służby.
@@ -65,12 +67,12 @@ Aplikacja posiada wbudowany system samodzielnych aktualizacji over-the-air:
 1. **Stały klucz podpisu (`android/app/czuwak-release.keystore`):** Każda kompilacja `.apk` jest podpisywana tym samym certyfikatem, dzięki czemu Android pozwala zainstalować nową wersję bezpośrednio na obecną („Aktualizuj”) **bez odinstalowywania i bez utraty pobranych rozkładów czy ustawień**.
 2. **Automatyczne wydania GitHub Releases ([`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml)):**
    - Po zmianie `APP_VERSION` / `APP_BUILD` w [`www/env.js`](www/env.js) i wypchnięciu kodu na gałąź `main`, GitHub Actions automatycznie buduje podpisany plik `.apk` i publikuje go w dwóch formatach:
-     - **Wersjonowany:** `czuwak(v1.2.0)(12).apk` (format: `czuwak(vX.X.X)(XX).apk`), dzięki czemu pobrane instalatory w folderze *Pobrane* na telefonie posiadają jednoznaczną identyfikację wersji i kompilacji.
+     - **Wersjonowany:** `czuwak(v1.2.1)(13).apk` (format: `czuwak(vX.X.X)(XX).apk`), dzięki czemu pobrane instalatory w folderze *Pobrane* na telefonie posiadają jednoznaczną identyfikację wersji i kompilacji.
      - **Alias stały:** `czuwak.apk` (dla zachowania wstecznej kompatybilności ze stałymi odnośnikami).
-     - Bezpośredni link: `https://github.com/piotrrgw/czuwak/releases/latest/download/czuwak(v1.2.0)(12).apk` lub `https://github.com/piotrrgw/czuwak/releases/latest/download/czuwak.apk`.
+     - Bezpośredni link: `https://github.com/piotrrgw/czuwak/releases/latest/download/czuwak(v1.2.1)(13).apk` lub `https://github.com/piotrrgw/czuwak/releases/latest/download/czuwak.apk`.
 3. **Wykrywanie aktualizacji w aplikacji:**
    - Przy starcie (oraz po kliknięciu **„Sprawdź aktualizację aplikacji (.apk)”** w menu bocznym) Czuwak porównuje swoją wersję z plikiem `www/env.js` na GitHubie oraz opcjonalnymi polami w Firestore (`system/db_status`: `latestCzuwakVersion`, `minCzuwakVersion`, `czuwakApkUrl`).
-   - Gdy pojawi się nowsza wersja, wyświetla niebieski baner **„Dostępna nowa wersja Czuwaka! Kliknij, aby pobrać i zainstalować (.apk)”**, który pobiera plik z precyzyjną nazwą (np. `czuwak(v1.2.0)(12).apk`) i uruchamia instalator aktualizacji.
+   - Gdy pojawi się nowsza wersja, wyświetla niebieski baner **„Dostępna nowa wersja Czuwaka! Kliknij, aby pobrać i zainstalować (.apk)”**, który pobiera plik z precyzyjną nazwą (np. `czuwak(v1.2.1)(13).apk`) i uruchamia instalator aktualizacji.
 
 ---
 

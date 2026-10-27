@@ -49,12 +49,21 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/czuwak_widget_info" />
         </receiver>
+
+        <!-- Serwis Pierwszoplanowy GPS (zapobiega uśpieniu GPS przy wygaszonym ekranie) -->
+        <service
+            android:name=".CzuwakForegroundService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
     </application>
 
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

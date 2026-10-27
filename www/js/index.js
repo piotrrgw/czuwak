@@ -512,9 +512,33 @@ window.updateStationAlertsMenuButton = () => {
 };
 
 // ==========================================
-// SYSTEM DŹWIĘKÓW CZUWAKA (3 DŹWIĘKI + WŁASNY Z TELEFONU)
+// SYSTEM DŹWIĘKÓW CZUWAKA (3 DŹWIĘKI + WŁASNY Z TELEFONU W INDEXEDDB)
 // ==========================================
+const CUSTOM_SOUND_IDB_KEY = 'CZUWAK_CUSTOM_SOUND_DATA_IDB';
 window._currentAudioPlayer = null;
+window._cachedCustomSoundData = null;
+
+// Inicjalne załadowanie własnego dźwięku z IndexedDB (oraz migracja ze starego localStorage)
+(async function initCustomSoundFromIdb() {
+    try {
+        const legacyData = localStorage.getItem('CZUWAK_CUSTOM_SOUND_DATA');
+        if (legacyData) {
+            window._cachedCustomSoundData = legacyData;
+            if (typeof localforage !== 'undefined') {
+                await localforage.setItem(CUSTOM_SOUND_IDB_KEY, legacyData);
+                localStorage.removeItem('CZUWAK_CUSTOM_SOUND_DATA');
+            }
+        } else if (typeof localforage !== 'undefined') {
+            const idbData = await localforage.getItem(CUSTOM_SOUND_IDB_KEY);
+            if (idbData) {
+                window._cachedCustomSoundData = idbData;
+            }
+        }
+        if (typeof window.syncNotificationSoundUI === 'function') {
+            window.syncNotificationSoundUI();
+        }
+    } catch (e) {}
+})();
 
 window.getNotificationSoundType = () => {
     const s = localStorage.getItem('CZUWAK_NOTIFICATION_SOUND_TYPE');
@@ -539,16 +563,22 @@ window.handleCustomSoundSelected = (inputEl) => {
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
         try {
             const dataUrl = e.target.result;
-            localStorage.setItem('CZUWAK_CUSTOM_SOUND_DATA', dataUrl);
+            window._cachedCustomSoundData = dataUrl;
+            if (typeof localforage !== 'undefined') {
+                await localforage.setItem(CUSTOM_SOUND_IDB_KEY, dataUrl);
+                localStorage.removeItem('CZUWAK_CUSTOM_SOUND_DATA');
+            } else {
+                localStorage.setItem('CZUWAK_CUSTOM_SOUND_DATA', dataUrl);
+            }
             localStorage.setItem('CZUWAK_CUSTOM_SOUND_NAME', file.name || 'Własny dźwięk');
             localStorage.setItem('CZUWAK_NOTIFICATION_SOUND_TYPE', 'custom');
             window.syncNotificationSoundUI();
             window.playNotificationSound('custom');
         } catch (err) {
-            console.error('Błąd zapisu pliku audio w localStorage:', err);
+            console.error('Błąd zapisu pliku audio w IndexedDB:', err);
             alert('Wystąpił błąd podczas zapisywania pliku dźwiękowego.');
         }
     };
@@ -558,9 +588,15 @@ window.handleCustomSoundSelected = (inputEl) => {
     reader.readAsDataURL(file);
 };
 
-window.clearCustomSound = () => {
+window.clearCustomSound = async () => {
+    window._cachedCustomSoundData = null;
     localStorage.removeItem('CZUWAK_CUSTOM_SOUND_DATA');
     localStorage.removeItem('CZUWAK_CUSTOM_SOUND_NAME');
+    try {
+        if (typeof localforage !== 'undefined') {
+            await localforage.removeItem(CUSTOM_SOUND_IDB_KEY);
+        }
+    } catch (e) {}
     localStorage.setItem('CZUWAK_NOTIFICATION_SOUND_TYPE', 'chime');
     const fileInput = document.getElementById('customAudioFileInput');
     if (fileInput) fileInput.value = '';
@@ -570,7 +606,7 @@ window.clearCustomSound = () => {
 
 window.syncNotificationSoundUI = () => {
     const curType = window.getNotificationSoundType();
-    const customData = localStorage.getItem('CZUWAK_CUSTOM_SOUND_DATA');
+    const customData = window._cachedCustomSoundData || localStorage.getItem('CZUWAK_CUSTOM_SOUND_DATA');
     const customName = localStorage.getItem('CZUWAK_CUSTOM_SOUND_NAME') || '';
 
     const btnChime = document.getElementById('btnSoundChime');
@@ -608,7 +644,7 @@ window.syncNotificationSoundUI = () => {
 
     const delBtn = document.getElementById('btnDeleteCustomSound');
     if (delBtn) {
-        delBtn.style.display = customData ? 'inline-flex' : 'none';
+        delBtn.style.display = (customData || customName) ? 'inline-flex' : 'none';
     }
 };
 
@@ -719,7 +755,7 @@ window.playNotificationSound = (explicitType = null) => {
     const soundType = explicitType || window.getNotificationSoundType();
 
     if (soundType === 'custom') {
-        const customData = localStorage.getItem('CZUWAK_CUSTOM_SOUND_DATA');
+        const customData = window._cachedCustomSoundData || localStorage.getItem('CZUWAK_CUSTOM_SOUND_DATA');
         if (customData) {
             try {
                 if (window._currentAudioPlayer) {
@@ -1152,6 +1188,9 @@ window.centerOnActiveTrainPosition = () => {
 window.stopTrainTracking = () => {
     window.activeTrackingMode = null;
     window.releaseWakeLock();
+    if (window.CzuwakNativeWidget && typeof window.CzuwakNativeWidget.stopForegroundTracking === 'function') {
+        try { window.CzuwakNativeWidget.stopForegroundTracking(); } catch (e) {}
+    }
     window.stopAlarmLoop();
     window.hideGpsSignalWarning();
     window.updateSpeedAndGpsIndicator(null, 'off');
@@ -4864,26 +4903,18 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
         const arrStr = typeof stacjaObj === 'object' && stacjaObj !== null && stacjaObj.przyjazd ? String(stacjaObj.przyjazd) : '-';
         const depStr = typeof stacjaObj === 'object' && stacjaObj !== null && stacjaObj.odjazd ? String(stacjaObj.odjazd) : '-';
 
-        const stData = stationsList.find(s => s && s.stacja && s.stacja.toUpperCase() === stacjaNazwa);
-        if (stData) {
-            let stLat = null, stLng = null;
-            if (stData.lokalizacja_gps) {
-                stLat = stData.lokalizacja_gps.latitude !== undefined ? stData.lokalizacja_gps.latitude : stData.lokalizacja_gps._lat;
-                stLng = stData.lokalizacja_gps.longitude !== undefined ? stData.lokalizacja_gps.longitude : stData.lokalizacja_gps._long;
-            } else if (stData.lat !== undefined && stData.lng !== undefined) {
-                stLat = stData.lat;
-                stLng = stData.lng;
-            }
-            if (typeof stLat === 'number' && typeof stLng === 'number' && !isNaN(stLat) && !isNaN(stLng)) {
-                routeCoords.push({
-                    index: idx,
-                    name: stacjaNazwa,
-                    lat: stLat,
-                    lng: stLng,
-                    arrStr: arrStr,
-                    depStr: depStr
-                });
-            }
+        const stCoords = getStationCoordsFast(stacjaNazwa);
+        let coordAttrs = ' data-stname="' + escapeHTML(stacjaNazwa) + '"';
+        if (stCoords) {
+            routeCoords.push({
+                index: idx,
+                name: stacjaNazwa,
+                lat: stCoords.lat,
+                lng: stCoords.lng,
+                arrStr: arrStr,
+                depStr: depStr
+            });
+            coordAttrs += ' data-lat="' + stCoords.lat + '" data-lng="' + stCoords.lng + '"';
         }
 
         const isOutsideDuty = (idx < window._crewDutyStartIdx || idx > window._crewDutyEndIdx);
@@ -4982,7 +5013,7 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
             '\x3Cdiv id="actualDepBox_' + idx + '" style="width:100%;"\x3E' + actualDepHtml + '\x3C/div\x3E' +
         '\x3C/div\x3E';
 
-        html += '\x3Ctr class="' + rowClass + '" data-station-idx="' + idx + '"' + absArrAttr + absDepAttr + rowStyleAttr + '\x3E' +
+        html += '\x3Ctr class="' + rowClass + '" data-station-idx="' + idx + '"' + coordAttrs + absArrAttr + absDepAttr + rowStyleAttr + '\x3E' +
             '\x3Ctd class="station-name-td" data-label="Stacja"\x3E' +
                 '\x3Cdiv class="station-cell-wrapper"\x3E' +
                     '\x3Cdiv class="station-name-row-line"\x3E' +
@@ -5067,6 +5098,7 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
     }
 
     listContainer.innerHTML = html;
+    window._cachedRouteRowElements = Array.from(listContainer.querySelectorAll('.train-route-table tr[data-station-idx]'));
     mainBox.style.display = 'block';
     mainBox.className = 'bg-train';
     mainBox.innerText = "POCIĄG - " + escapeHTML(pociag.nazwa || '') + " (" + escapeHTML(pociag.numer) + ")";
@@ -5103,6 +5135,37 @@ function generujWidokTrasy(pociag, listContainer, mainBox, bestMatch = null) {
 // ==========================================
 // CZUWAK GPS – AUTOMATYCZNE ŚLEDZENIE, PRĘDKOŚCIOMIERZ, KALISZ FIX v2, TUNELE I AUTO-STOP PO ZMIANIE DK
 // ==========================================
+function getStationCoordsFast(stationNameUpper) {
+    if (!stationNameUpper) return null;
+    const list = window._cachedStationList || [];
+    if (list.length === 0) return null;
+
+    if (!window._stationCoordsIndexMap || window._stationCoordsIndexRef !== list || window._stationCoordsIndexSize !== list.length) {
+        const map = new Map();
+        for (let i = 0; i < list.length; i++) {
+            const s = list[i];
+            if (!s || !s.stacja) continue;
+            let stLat = null;
+            let stLng = null;
+            if (s.lokalizacja_gps) {
+                stLat = s.lokalizacja_gps.latitude !== undefined ? s.lokalizacja_gps.latitude : s.lokalizacja_gps._lat;
+                stLng = s.lokalizacja_gps.longitude !== undefined ? s.lokalizacja_gps.longitude : s.lokalizacja_gps._long;
+            } else if (s.lat !== undefined && s.lng !== undefined) {
+                stLat = s.lat;
+                stLng = s.lng;
+            }
+            if (typeof stLat === 'number' && typeof stLng === 'number' && !isNaN(stLat) && !isNaN(stLng)) {
+                map.set(String(s.stacja).trim().toUpperCase(), { lat: stLat, lng: stLng });
+            }
+        }
+        window._stationCoordsIndexMap = map;
+        window._stationCoordsIndexRef = list;
+        window._stationCoordsIndexSize = list.length;
+    }
+
+    return window._stationCoordsIndexMap.get(String(stationNameUpper).trim().toUpperCase()) || null;
+}
+
 function getDistance(lat1, lon1, lat2, lon2) {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -5131,6 +5194,15 @@ window.locateTrainByGPS = async (silent = false) => {
 
     window.activeTrackingMode = 'gps';
     window.requestWakeLock();
+    if (window.CzuwakNativeWidget && typeof window.CzuwakNativeWidget.startForegroundTracking === 'function') {
+        try {
+            const trNum = (window._currentTrainObject && window._currentTrainObject.numer) ? window._currentTrainObject.numer : '';
+            window.CzuwakNativeWidget.startForegroundTracking(
+                'Czuwak GPS aktywny' + (trNum ? (' • Pociąg ' + trNum) : ''),
+                'Śledzenie pozycji pociągu na szlaku'
+            );
+        } catch (e) {}
+    }
     window.updateSpeedAndGpsIndicator(window._smoothedSpeedKmH, 'searching');
 
     // Odblokowanie Web Audio podczas gestu użytkownika
@@ -5185,7 +5257,6 @@ window.locateTrainByGPS = async (silent = false) => {
             }
         }
     }
-    const stationsList = window._cachedStationList || [];
 
     if (!window._passedStationIndices) window._passedStationIndices = new Set();
     if (!window._prevStationDistances) window._prevStationDistances = {};
@@ -5202,7 +5273,11 @@ window.locateTrainByGPS = async (silent = false) => {
         window.hideGpsSignalWarning();
 
         try {
-            const currentRows = Array.from(document.querySelectorAll('.train-route-table tr:not(.train-moving-row):not(.station-standing-train-row):not(thead tr)'));
+            let currentRows = window._cachedRouteRowElements;
+            if (!Array.isArray(currentRows) || currentRows.length === 0 || !currentRows[0].isConnected) {
+                currentRows = Array.from(document.querySelectorAll('.train-route-table tr[data-station-idx]'));
+                window._cachedRouteRowElements = currentRows;
+            }
             if (currentRows.length === 0) return;
 
             let closestRowIndex = -1;
@@ -5212,47 +5287,50 @@ window.locateTrainByGPS = async (silent = false) => {
 
             for (let i = 0; i < currentRows.length; i++) {
                 const row = currentRows[i];
-                const stationNameCell = row.querySelector('td:first-child');
-                if (!stationNameCell) continue;
+                let stationName = row.dataset.stname || '';
+                if (!stationName) {
+                    const stationNameCell = row.querySelector('td:first-child');
+                    if (!stationNameCell) continue;
+                    const clickableEl = stationNameCell.querySelector('.station-clickable');
+                    stationName = (clickableEl ? clickableEl.innerText : stationNameCell.innerText).trim().toUpperCase();
+                    row.dataset.stname = stationName;
+                }
 
-                const clickableEl = stationNameCell.querySelector('.station-clickable');
-                const stationName = (clickableEl ? clickableEl.innerText : stationNameCell.innerText).trim().toUpperCase();
-                const stationData = stationsList.find(s => s && s.stacja && s.stacja.toUpperCase() === stationName);
+                let stLat = row.dataset.lat !== undefined ? parseFloat(row.dataset.lat) : NaN;
+                let stLng = row.dataset.lng !== undefined ? parseFloat(row.dataset.lng) : NaN;
 
-                if (stationData) {
-                    let stLat = null;
-                    let stLng = null;
-                    if (stationData.lokalizacja_gps) {
-                        stLat = stationData.lokalizacja_gps.latitude !== undefined ? stationData.lokalizacja_gps.latitude : stationData.lokalizacja_gps._lat;
-                        stLng = stationData.lokalizacja_gps.longitude !== undefined ? stationData.lokalizacja_gps.longitude : stationData.lokalizacja_gps._long;
-                    } else if (stationData.lat !== undefined && stationData.lng !== undefined) {
-                        stLat = stationData.lat;
-                        stLng = stationData.lng;
+                if (isNaN(stLat) || isNaN(stLng)) {
+                    const stCoords = getStationCoordsFast(stationName);
+                    if (stCoords) {
+                        stLat = stCoords.lat;
+                        stLng = stCoords.lng;
+                        row.dataset.lat = String(stLat);
+                        row.dataset.lng = String(stLng);
                     }
+                }
 
-                    if (typeof stLat === 'number' && typeof stLng === 'number' && !isNaN(stLat) && !isNaN(stLng)) {
-                        const dist = getDistance(userLat, userLng, stLat, stLng);
-                        const matchedIdx = rowDistances.length;
-                        const absArr = row.dataset.absArr !== undefined ? parseInt(row.dataset.absArr, 10) : null;
-                        const absDep = row.dataset.absDep !== undefined ? parseInt(row.dataset.absDep, 10) : null;
+                if (!isNaN(stLat) && !isNaN(stLng)) {
+                    const dist = getDistance(userLat, userLng, stLat, stLng);
+                    const matchedIdx = rowDistances.length;
+                    const absArr = row.dataset.absArr !== undefined ? parseInt(row.dataset.absArr, 10) : null;
+                    const absDep = row.dataset.absDep !== undefined ? parseInt(row.dataset.absDep, 10) : null;
 
-                        rowDistances.push({
-                            index: i,
-                            matchedIdx: matchedIdx,
-                            name: stationName,
-                            lat: stLat,
-                            lng: stLng,
-                            distance: dist,
-                            absArr: absArr,
-                            absDep: absDep,
-                            row: row
-                        });
+                    rowDistances.push({
+                        index: i,
+                        matchedIdx: matchedIdx,
+                        name: stationName,
+                        lat: stLat,
+                        lng: stLng,
+                        distance: dist,
+                        absArr: absArr,
+                        absDep: absDep,
+                        row: row
+                    });
 
-                        if (dist < minDistance) {
-                            minDistance = dist;
-                            closestRowIndex = i;
-                            closestMatchedPos = matchedIdx;
-                        }
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        closestRowIndex = i;
+                        closestMatchedPos = matchedIdx;
                     }
                 }
             }
@@ -5406,36 +5484,47 @@ window.locateTrainByGPS = async (silent = false) => {
 
             rowDistances.forEach(rd => {
                 const isClosest = rd.index === closestRowIndex;
-                const stationNameTd = rd.row.querySelector('.station-name-td');
-                if (stationNameTd) {
-                    let cellWrapper = stationNameTd.querySelector('.station-cell-wrapper');
-                    if (!cellWrapper) {
-                        cellWrapper = document.createElement('div');
-                        cellWrapper.className = 'station-cell-wrapper';
-                        while (stationNameTd.firstChild) {
-                            cellWrapper.appendChild(stationNameTd.firstChild);
+                let distDiv = rd.row._cachedDistDiv;
+                if (!distDiv || !distDiv.isConnected) {
+                    const stationNameTd = rd.row.querySelector('.station-name-td');
+                    if (stationNameTd) {
+                        let cellWrapper = stationNameTd.querySelector('.station-cell-wrapper');
+                        if (!cellWrapper) {
+                            cellWrapper = document.createElement('div');
+                            cellWrapper.className = 'station-cell-wrapper';
+                            while (stationNameTd.firstChild) {
+                                cellWrapper.appendChild(stationNameTd.firstChild);
+                            }
+                            stationNameTd.appendChild(cellWrapper);
                         }
-                        stationNameTd.appendChild(cellWrapper);
+                        distDiv = cellWrapper.querySelector('.gps-distance-indicator');
+                        if (!distDiv) {
+                            distDiv = document.createElement('div');
+                            distDiv.className = 'gps-distance-indicator';
+                            cellWrapper.appendChild(distDiv);
+                        }
+                        rd.row._cachedDistDiv = distDiv;
                     }
+                }
 
-                    const distColor = isClosest ? color : 'var(--text-muted)';
-                    const distBg = isClosest ? bgColor : 'transparent';
-                    const distBorder = isClosest ? ('1px solid ' + color) : '1px dashed var(--border)';
+                if (distDiv) {
+                    const distFormatted = rd.distance.toFixed(1);
+                    const stateKey = distFormatted + '|' + (isClosest ? '1' : '0') + '|' + (isHighConfidenceGps ? '1' : '0');
+                    if (distDiv.dataset.lastGpsState !== stateKey) {
+                        distDiv.dataset.lastGpsState = stateKey;
+                        const distColor = isClosest ? color : 'var(--text-muted)';
+                        const distBg = isClosest ? bgColor : 'transparent';
+                        const distBorder = isClosest ? ('1px solid ' + color) : '1px dashed var(--border)';
 
-                    let distDiv = cellWrapper.querySelector('.gps-distance-indicator');
-                    if (!distDiv) {
-                        distDiv = document.createElement('div');
-                        distDiv.className = 'gps-distance-indicator';
-                        cellWrapper.appendChild(distDiv);
+                        distDiv.className = 'gps-distance-indicator' + (isClosest ? ' closest' : '');
+                        distDiv.style.color = distColor;
+
+                        const extraText = (isClosest && !isHighConfidenceGps) ? accuracyText : '';
+                        distDiv.innerHTML =
+                            '\x3Cspan class="gps-dist-pill" style="background: ' + distBg + '; border: ' + distBorder + '; font-weight: ' + (isClosest ? '800' : '600') + ';"\x3E' +
+                                '\x3Cspan class="material-symbols-outlined icon-sm" style="font-size: 0.95rem;"\x3Enear_me\x3C/span\x3E ~' + distFormatted + ' km' +
+                            '\x3C/span\x3E' + extraText;
                     }
-                    distDiv.className = 'gps-distance-indicator' + (isClosest ? ' closest' : '');
-                    distDiv.style.color = distColor;
-
-                    const extraText = (isClosest && !isHighConfidenceGps) ? accuracyText : '';
-                    distDiv.innerHTML =
-                        '\x3Cspan class="gps-dist-pill" style="background: ' + distBg + '; border: ' + distBorder + '; font-weight: ' + (isClosest ? '800' : '600') + ';"\x3E' +
-                            '\x3Cspan class="material-symbols-outlined icon-sm" style="font-size: 0.95rem;"\x3Enear_me\x3C/span\x3E ~' + rd.distance.toFixed(1) + ' km' +
-                        '\x3C/span\x3E' + extraText;
                 }
             });
 
@@ -6099,24 +6188,43 @@ window.locateTrainByGPS = async (silent = false) => {
     }, 3000);
 };
 
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-        if (typeof window.czuwakLog === 'function') {
-            window.czuwakLog('INFO', 'LIFECYCLE', 'Aplikacja powróciła na pierwszy plan (foreground/resume)');
+window._lastAppForegroundResumeTs = 0;
+
+function handleAppForegroundResume(source) {
+    const now = Date.now();
+    if (now - window._lastAppForegroundResumeTs < 1500) {
+        return;
+    }
+    window._lastAppForegroundResumeTs = now;
+
+    if (typeof window.czuwakLog === 'function') {
+        window.czuwakLog('INFO', 'LIFECYCLE', 'Aplikacja powróciła na pierwszy plan (' + source + ')');
+    }
+    if (typeof window.syncPendingWidgetEvents === 'function') {
+        window.syncPendingWidgetEvents();
+    }
+    // Przeładuj log rzeczywistych czasów z pamięci trwałej (ochrona przed utratą po wyjściu z aplikacji)
+    loadStationActualLog();
+    if (window._currentTrainObject && window._currentTrainObject.stacje) {
+        const stationsArr = Array.isArray(window._currentTrainObject.stacje)
+            ? window._currentTrainObject.stacje
+            : Object.values(window._currentTrainObject.stacje);
+        for (let k = 0; k < stationsArr.length; k++) {
+            window.renderStationRowActualUI(k);
         }
-        // Przeładuj log rzeczywistych czasów z pamięci trwałej (ochrona przed utratą po wyjściu z aplikacji)
-        loadStationActualLog();
-        if (window._currentTrainObject && window._currentTrainObject.stacje) {
-            const stationsArr = Array.isArray(window._currentTrainObject.stacje)
-                ? window._currentTrainObject.stacje
-                : Object.values(window._currentTrainObject.stacje);
-            for (let k = 0; k < stationsArr.length; k++) {
-                window.renderStationRowActualUI(k);
-            }
-        }
-        if (!window._crewDutyCompleted && document.querySelector('.train-route-table')) {
+    }
+    if (!window._crewDutyCompleted && document.querySelector('.train-route-table')) {
+        const hasFreshGpsWatch = (window._trainGpsWatchId !== null && window._trainGpsWatchId !== undefined) &&
+                                 (now - (window._lastValidGpsTimestamp || 0) < 5000);
+        if (!hasFreshGpsWatch) {
             window.locateTrainByGPS(true);
         }
+    }
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        handleAppForegroundResume('visibilitychange');
     }
 });
 
@@ -6125,21 +6233,7 @@ if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App
     try {
         window.Capacitor.Plugins.App.addListener('appStateChange', (state) => {
             if (state && state.isActive) {
-                if (typeof window.czuwakLog === 'function') {
-                    window.czuwakLog('INFO', 'LIFECYCLE', 'Capacitor AppStateChange: isActive=true');
-                }
-                loadStationActualLog();
-                if (window._currentTrainObject && window._currentTrainObject.stacje) {
-                    const stationsArr = Array.isArray(window._currentTrainObject.stacje)
-                        ? window._currentTrainObject.stacje
-                        : Object.values(window._currentTrainObject.stacje);
-                    for (let k = 0; k < stationsArr.length; k++) {
-                        window.renderStationRowActualUI(k);
-                    }
-                }
-                if (!window._crewDutyCompleted && document.querySelector('.train-route-table')) {
-                    window.locateTrainByGPS(true);
-                }
+                handleAppForegroundResume('Capacitor.appStateChange');
             }
         });
     } catch (e) {}

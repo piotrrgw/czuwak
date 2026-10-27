@@ -66,9 +66,32 @@ public class CzuwakWidgetBridge {
             editor.apply();
 
             CzuwakWidgetProvider.updateAllWidgets(context);
+
+            String fgTitle = obj.optString("trainInfo", "Czuwak GPS aktywny");
+            String fgNext = obj.optString("nextStationClean", obj.optString("nextStation", ""));
+            String fgDist = obj.optString("distStr", "");
+            String fgSpeed = obj.optString("speedStr", "");
+            String fgSub = fgNext;
+            if (!fgDist.isEmpty()) fgSub += " (" + fgDist + ")";
+            if (!fgSpeed.isEmpty()) fgSub += " • " + fgSpeed;
+            if (!fgSub.isEmpty()) {
+                CzuwakForegroundService.startOrUpdate(context, fgTitle, "Nast.: " + fgSub);
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    @JavascriptInterface
+    public void startForegroundTracking(String title, String text) {
+        if (context == null) return;
+        CzuwakForegroundService.startOrUpdate(context, title, text);
+    }
+
+    @JavascriptInterface
+    public void stopForegroundTracking() {
+        if (context == null) return;
+        CzuwakForegroundService.stop(context);
     }
 
     @JavascriptInterface
@@ -116,6 +139,7 @@ public class CzuwakWidgetBridge {
                 .apply();
 
             CzuwakWidgetProvider.updateAllWidgets(context);
+            CzuwakForegroundService.stop(context);
         } catch (Exception e) {
             e.printStackTrace();
         }
