@@ -8,9 +8,38 @@ import org.json.JSONObject;
 
 public class CzuwakWidgetBridge {
     private final Context context;
+    private final MainActivity activity;
+
+    public CzuwakWidgetBridge(MainActivity activity) {
+        this.activity = activity;
+        this.context = activity != null ? activity.getApplicationContext() : null;
+    }
 
     public CzuwakWidgetBridge(Context context) {
-        this.context = context.getApplicationContext();
+        this.activity = null;
+        this.context = context != null ? context.getApplicationContext() : null;
+    }
+
+    @JavascriptInterface
+    public void pickLogFolder() {
+        if (activity != null) {
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    activity.openFolderPicker();
+                }
+            });
+        }
+    }
+
+    @JavascriptInterface
+    public String getLogFolderDisplay() {
+        return CzuwakLogWriter.getLogFolderDisplay(context);
+    }
+
+    @JavascriptInterface
+    public boolean appendLogChunk(String filename, String chunk) {
+        return CzuwakLogWriter.appendToFile(context, filename, chunk);
     }
 
     @JavascriptInterface

@@ -23,11 +23,80 @@ function escapeHTML(str) {
 }
 
 // ==========================================
-// DZIENNIK DIAGNOSTYCZNY CZUWAKA (LOGI LOKALNE)
+// DZIENNIK DIAGNOSTYCZNY CZUWAKA (LOGI LOKALNE I AUTOZAPIS DO PLIKU)
 // ==========================================
 const CZUWAK_DIAGNOSTIC_LOGS_KEY = 'CZUWAK_DIAG_LOGS_V1';
+const MAX_DIAGNOSTIC_LOGS = 5000;
 window._diagnosticLogBuffer = [];
+window._pendingLogChunk = '';
+window._pickedDirectoryHandle = null;
 let _persistDiagLogTimer = null;
+let _streamLogFileTimer = null;
+
+function getLogTrainNumber() {
+    return window._currentActiveTrainNumber ||
+           (window._currentTrainObject && window._currentTrainObject.numer) ||
+           window.lastSearchedTrainNum ||
+           '';
+}
+
+function getLogFileNames() {
+    const now = new Date();
+    const pad = (n, z = 2) => String(n).padStart(z, '0');
+    const dateStr = String(now.getFullYear()) + pad(now.getMonth() + 1) + pad(now.getDate());
+    const trNum = getLogTrainNumber();
+    const trainFileName = trNum
+        ? ('czuwak_log_' + dateStr + '_poc_' + trNum + '.txt')
+        : ('czuwak_log_' + dateStr + '_trasa.txt');
+    const shiftFileName = 'czuwak_sluzba_' + dateStr + '.txt';
+    return { dateStr, trNum, trainFileName, shiftFileName };
+}
+
+function flushLogChunkToFile(forceImmediate = false) {
+    if (!window._pendingLogChunk) return;
+    const chunk = window._pendingLogChunk;
+    window._pendingLogChunk = '';
+
+    const { trainFileName, shiftFileName } = getLogFileNames();
+
+    // 1. Natywny zapis przez CzuwakWidgetBridge (Android APK)
+    if (window.CzuwakNativeWidget && typeof window.CzuwakNativeWidget.appendLogChunk === 'function') {
+        try {
+            window.CzuwakNativeWidget.appendLogChunk(trainFileName, chunk);
+            window.CzuwakNativeWidget.appendLogChunk(shiftFileName, chunk);
+        } catch (e) {
+            console.warn('Błąd natywnego zapisu logów do pliku:', e);
+        }
+    }
+
+    // 2. Web File System Access API (PWA / przeglądarki ze wsparciem showDirectoryPicker)
+    if (window._pickedDirectoryHandle) {
+        (async () => {
+            try {
+                const writeToHandle = async (fname) => {
+                    const fileHandle = await window._pickedDirectoryHandle.getFileHandle(fname, { create: true });
+                    const writable = await fileHandle.createWritable({ keepExistingData: true });
+                    const file = await fileHandle.getFile();
+                    await writable.seek(file.size);
+                    await writable.write(chunk);
+                    await writable.close();
+                };
+                await writeToHandle(trainFileName);
+                await writeToHandle(shiftFileName);
+            } catch (e) {
+                console.warn('Błąd zapisu FileSystemHandle:', e);
+            }
+        })();
+    }
+}
+
+function scheduleStreamLogFile() {
+    if (_streamLogFileTimer) return;
+    _streamLogFileTimer = setTimeout(() => {
+        _streamLogFileTimer = null;
+        flushLogChunkToFile();
+    }, 5000);
+}
 
 function schedulePersistDiagnosticLogs() {
     if (_persistDiagLogTimer) return;
@@ -35,7 +104,7 @@ function schedulePersistDiagnosticLogs() {
         _persistDiagLogTimer = null;
         try {
             if (typeof localforage !== 'undefined' && Array.isArray(window._diagnosticLogBuffer)) {
-                await localforage.setItem(CZUWAK_DIAGNOSTIC_LOGS_KEY, window._diagnosticLogBuffer.slice(0, 300));
+                await localforage.setItem(CZUWAK_DIAGNOSTIC_LOGS_KEY, window._diagnosticLogBuffer.slice(0, MAX_DIAGNOSTIC_LOGS));
             }
         } catch (e) {}
     }, 2500);
@@ -45,10 +114,21 @@ function schedulePersistDiagnosticLogs() {
 if (typeof localforage !== 'undefined') {
     localforage.getItem(CZUWAK_DIAGNOSTIC_LOGS_KEY).then(saved => {
         if (Array.isArray(saved) && saved.length > 0) {
-            window._diagnosticLogBuffer = saved.concat(window._diagnosticLogBuffer).slice(0, 300);
+            window._diagnosticLogBuffer = saved.concat(window._diagnosticLogBuffer).slice(0, MAX_DIAGNOSTIC_LOGS);
         }
     }).catch(() => {});
 }
+
+// Globalne chwytanie niespodziewanych błędów skryptu (Crash Logger)
+window.addEventListener('error', (event) => {
+    if (event && event.message) {
+        window.czuwakLog('ERROR', 'CRASH', 'Błąd JS: ' + event.message + ' (' + (event.filename || '') + ':' + (event.lineno || '') + ')');
+    }
+});
+window.addEventListener('unhandledrejection', (event) => {
+    const reason = event && event.reason ? (event.reason.message || String(event.reason)) : 'Nieznany błąd Promise';
+    window.czuwakLog('ERROR', 'CRASH', 'Nieobsłużony błąd asynchroniczny: ' + reason);
+});
 
 window.czuwakLog = function(level, category, message, data = null) {
     const now = new Date();
@@ -58,6 +138,7 @@ window.czuwakLog = function(level, category, message, data = null) {
     const cat = String(category || 'APP').toUpperCase();
     const msg = String(message || '');
     const dataStr = data ? (typeof data === 'object' ? JSON.stringify(data) : String(data)) : null;
+    const currentTrainNum = getLogTrainNumber();
 
     const entry = {
         time: timeStr,
@@ -65,27 +146,98 @@ window.czuwakLog = function(level, category, message, data = null) {
         level: lvl,
         category: cat,
         message: msg,
-        data: dataStr
+        data: dataStr,
+        train: currentTrainNum
     };
 
     if (!window._diagnosticLogBuffer) window._diagnosticLogBuffer = [];
     window._diagnosticLogBuffer.unshift(entry);
-    if (window._diagnosticLogBuffer.length > 300) {
+    if (window._diagnosticLogBuffer.length > MAX_DIAGNOSTIC_LOGS) {
         window._diagnosticLogBuffer.pop();
     }
 
+    const trPrefix = currentTrainNum ? (' [POC ' + currentTrainNum + ']') : '';
+    const lineText = '[' + timeStr + ']' + trPrefix + ' [' + cat + '] [' + lvl + '] ' + msg +
+                     (dataStr ? (' | ' + dataStr) : '') + '\n';
+    window._pendingLogChunk = (window._pendingLogChunk || '') + lineText;
+
+    scheduleStreamLogFile();
     schedulePersistDiagnosticLogs();
 
+    if (lvl === 'ERROR' || cat === 'STATION' || cat === 'ALERT' || cat === 'CRASH') {
+        flushLogChunkToFile(true);
+    }
+
     if (lvl === 'ERROR') {
-        console.error('[CZUWAK][' + cat + '] ' + msg, dataStr || '');
+        console.error('[CZUWAK][' + cat + ']' + trPrefix + ' ' + msg, dataStr || '');
     } else if (lvl === 'WARN') {
-        console.warn('[CZUWAK][' + cat + '] ' + msg, dataStr || '');
+        console.warn('[CZUWAK][' + cat + ']' + trPrefix + ' ' + msg, dataStr || '');
     } else {
-        console.log('[CZUWAK][' + cat + '] ' + msg, dataStr || '');
+        console.log('[CZUWAK][' + cat + ']' + trPrefix + ' ' + msg, dataStr || '');
     }
 };
 
+window.pickLogStorageFolder = async () => {
+    // 1. Android Native Bridge
+    if (window.CzuwakNativeWidget && typeof window.CzuwakNativeWidget.pickLogFolder === 'function') {
+        try {
+            window.CzuwakNativeWidget.pickLogFolder();
+            return;
+        } catch (e) {
+            console.warn('Błąd wywołania pickLogFolder:', e);
+        }
+    }
+
+    // 2. Web File System Access API
+    if (window.showDirectoryPicker) {
+        try {
+            const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            if (handle) {
+                window._pickedDirectoryHandle = handle;
+                window.onLogFolderPicked(handle.name || 'Wybrany folder');
+            }
+        } catch (e) {
+            if (e.name !== 'AbortError') {
+                alert('Nie udało się wybrać folderu: ' + (e.message || e));
+            }
+        }
+    } else {
+        alert('Wybór folderu na dysku telefonu (.apk) jest obsługiwany przez system Android. W wersji webowej logi są zapisywane w pamięci lokalnej z możliwością pobrania pliku .txt.');
+    }
+};
+
+window.onLogFolderPicked = (folderName) => {
+    localStorage.setItem('CZUWAK_LOG_FOLDER_NAME', folderName);
+    window.syncLogFolderUI();
+    if (typeof window.czuwakLog === 'function') {
+        window.czuwakLog('INFO', 'APP', 'Zmieniono folder zapisu logów na: ' + folderName);
+    }
+    flushLogChunkToFile(true);
+    if (typeof window.showCzuwakWidgetActionToast === 'function') {
+        window.showCzuwakWidgetActionToast('Folder logów: ' + folderName, 'folder_open', '#38bdf8');
+    }
+};
+
+window.getLogFolderDisplay = () => {
+    if (window.CzuwakNativeWidget && typeof window.CzuwakNativeWidget.getLogFolderDisplay === 'function') {
+        try {
+            const disp = window.CzuwakNativeWidget.getLogFolderDisplay();
+            if (disp) return disp;
+        } catch (e) {}
+    }
+    return localStorage.getItem('CZUWAK_LOG_FOLDER_NAME') || 'Pobrane / Czuwak_Logi (Domyślny)';
+};
+
+window.syncLogFolderUI = () => {
+    const disp = window.getLogFolderDisplay();
+    const menuLabel = document.getElementById('menuLogFolderLabel');
+    if (menuLabel) menuLabel.innerText = disp;
+    const modalLabel = document.getElementById('modalLogFolderLabel');
+    if (modalLabel) modalLabel.innerText = disp;
+};
+
 window.copyDiagnosticLogs = function() {
+    flushLogChunkToFile(true);
     const logs = window._diagnosticLogBuffer || [];
     if (logs.length === 0) {
         alert('Dziennik diagnostyczny jest pusty.');
@@ -97,7 +249,8 @@ window.copyDiagnosticLogs = function() {
                'Liczba zdarzen: ' + logs.length + '\n\n';
 
     logs.forEach(l => {
-        text += '[' + l.time + '] [' + l.category + '] [' + l.level + '] ' + l.message;
+        const trPrefix = l.train ? (' [POC ' + l.train + ']') : '';
+        text += '[' + l.time + ']' + trPrefix + ' [' + l.category + '] [' + l.level + '] ' + l.message;
         if (l.data) text += ' | ' + l.data;
         text += '\n';
     });
@@ -114,18 +267,22 @@ window.copyDiagnosticLogs = function() {
 };
 
 window.downloadDiagnosticLogs = function() {
+    flushLogChunkToFile(true);
     const logs = window._diagnosticLogBuffer || [];
     if (logs.length === 0) {
         alert('Dziennik diagnostyczny jest pusty.');
         return;
     }
+    const { trainFileName, trNum } = getLogFileNames();
     let text = '=== CZUWAK DZIENNIK DIAGNOSTYCZNY ===\n' +
                'Wersja: ' + (window.APP_VERSION || '') + ' (' + (window.APP_BUILD || '') + ')\n' +
                'Data eksportu: ' + new Date().toISOString() + '\n' +
+               (trNum ? ('Aktywny pociąg: ' + trNum + '\n') : '') +
                'Liczba wpisow: ' + logs.length + '\n\n';
 
     logs.forEach(l => {
-        text += '[' + l.time + '] [' + l.category + '] [' + l.level + '] ' + l.message;
+        const trPrefix = l.train ? (' [POC ' + l.train + ']') : '';
+        text += '[' + l.time + ']' + trPrefix + ' [' + l.category + '] [' + l.level + '] ' + l.message;
         if (l.data) text += ' | ' + l.data;
         text += '\n';
     });
@@ -135,10 +292,7 @@ window.downloadDiagnosticLogs = function() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        const now = new Date();
-        const pad = (n) => String(n).padStart(2, '0');
-        const filename = 'czuwak_log_' + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + '_' + pad(now.getHours()) + pad(now.getMinutes()) + '.txt';
-        a.download = filename;
+        a.download = trainFileName;
         document.body.appendChild(a);
         a.click();
         setTimeout(() => {
@@ -151,8 +305,9 @@ window.downloadDiagnosticLogs = function() {
 };
 
 window.clearDiagnosticLogs = async function() {
-    if (!confirm('Czy na pewno chcesz wyczyścić cały dziennik diagnostyczny?')) return;
+    if (!confirm('Czy na pewno chcesz wyczyścić pamięć podręczną dziennika diagnostycznego? (Pliki zapisane w wybranym folderze telefonu pozostaną nienaruszone)')) return;
     window._diagnosticLogBuffer = [];
+    window._pendingLogChunk = '';
     try {
         if (typeof localforage !== 'undefined') {
             await localforage.removeItem(CZUWAK_DIAGNOSTIC_LOGS_KEY);
@@ -170,11 +325,11 @@ window.renderDiagnosticLogsList = function(filterCategory = 'all') {
 
     let filtered = logs;
     if (filterCategory === 'gps') {
-        filtered = logs.filter(l => l.category === 'GPS' || l.category === 'SPEED');
+        filtered = logs.filter(l => l.category === 'GPS' || l.category === 'SPEED' || l.category === 'TUNNEL');
     } else if (filterCategory === 'station') {
-        filtered = logs.filter(l => l.category === 'STATION' || l.category === 'DELAY');
+        filtered = logs.filter(l => l.category === 'STATION' || l.category === 'DELAY' || l.category === 'ALERT');
     } else if (filterCategory === 'error') {
-        filtered = logs.filter(l => l.level === 'ERROR' || l.level === 'WARN');
+        filtered = logs.filter(l => l.level === 'ERROR' || l.level === 'WARN' || l.category === 'CRASH');
     }
 
     if (filtered.length === 0) {
@@ -183,18 +338,23 @@ window.renderDiagnosticLogsList = function(filterCategory = 'all') {
     }
 
     let html = '';
-    filtered.slice(0, 150).forEach(l => {
+    filtered.slice(0, 200).forEach(l => {
         let catClass = 'gps';
         if (l.category === 'STATION') catClass = 'station';
         else if (l.category === 'SPEED') catClass = 'speed';
         else if (l.category === 'DELAY') catClass = 'delay';
+        else if (l.category === 'ALERT') catClass = 'alert';
+        else if (l.category === 'TUNNEL') catClass = 'tunnel';
         else if (l.category === 'LIFECYCLE') catClass = 'lifecycle';
-        if (l.level === 'ERROR') catClass = 'error';
+        if (l.level === 'ERROR' || l.category === 'CRASH') catClass = 'error';
         else if (l.level === 'WARN') catClass = 'warn';
+
+        const trTag = l.train ? ('\x3Cspan style="color:var(--primary); font-weight:800; font-size:0.68rem; margin-right:4px;"\x3E#' + escapeHTML(l.train) + '\x3C/span\x3E') : '';
 
         html += '\x3Cdiv class="diag-log-row"\x3E' +
             '\x3Cdiv class="diag-log-header"\x3E' +
                 '\x3Cspan style="color:#94a3b8; font-variant-numeric:tabular-nums;"\x3E' + escapeHTML(l.time) + '\x3C/span\x3E' +
+                trTag +
                 '\x3Cspan class="diag-badge ' + catClass + '"\x3E' + escapeHTML(l.category) + '\x3C/span\x3E' +
                 (l.level === 'WARN' || l.level === 'ERROR' ? ('\x3Cspan class="diag-badge ' + (l.level === 'ERROR' ? 'error' : 'warn') + '"\x3E' + escapeHTML(l.level) + '\x3C/span\x3E') : '') +
             '\x3C/div\x3E' +
@@ -213,9 +373,11 @@ window.openDiagnosticLogsModal = function() {
     overlay.onclick = (e) => { if (e.target === overlay) window.closeCzuwakSheet(); };
 
     const totalLogs = (window._diagnosticLogBuffer || []).length;
+    const folderDisp = window.getLogFolderDisplay();
+    const { trainFileName, shiftFileName, trNum } = getLogFileNames();
 
     overlay.innerHTML =
-        '\x3Cdiv class="czuwak-sheet-content" style="max-height:90vh;"\x3E' +
+        '\x3Cdiv class="czuwak-sheet-content" style="max-height:92vh;"\x3E' +
             '\x3Cdiv style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"\x3E' +
                 '\x3Cdiv style="font-size:1.05rem; font-weight:900; color:var(--text); display:flex; align-items:center; gap:6px;"\x3E' +
                     '\x3Cspan class="material-symbols-outlined" style="color:var(--primary);"\x3Eterminal\x3C/span\x3E Dziennik diagnostyczny' +
@@ -225,9 +387,23 @@ window.openDiagnosticLogsModal = function() {
                     '\x3Cspan class="material-symbols-outlined"\x3Eclose\x3C/span\x3E' +
                 '\x3C/button\x3E' +
             '\x3C/div\x3E' +
-            '\x3Cdiv style="font-size:0.78rem; color:var(--text-muted); margin-bottom:10px; line-height:1.35;"\x3E' +
-                'Zapis pomiarów GPS, wyliczeń prędkości, postojów i odjazdów ze stacji zapisywany lokalnie w telefonie.' +
+
+            // Panel konfiguracji folderu zapisu na żywo
+            '\x3Cdiv style="background:var(--input-bg); border:1.5px solid var(--primary); border-radius:10px; padding:10px 12px; margin-bottom:10px;"\x3E' +
+                '\x3Cdiv style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;"\x3E' +
+                    '\x3Cdiv style="display:flex; align-items:center; gap:6px; font-weight:800; font-size:0.82rem; color:var(--text);"\x3E' +
+                        '\x3Cspan class="material-symbols-outlined" style="color:var(--primary); font-size:1.05rem;"\x3Efolder_open\x3C/span\x3E Folder zapisu logów na żywo:' +
+                    '\x3C/div\x3E' +
+                    '\x3Cbutton type="button" onclick="window.pickLogStorageFolder()" style="padding:4px 10px; border-radius:6px; background:var(--primary); border:none; color:#ffffff; font-size:0.76rem; font-weight:800; cursor:pointer;"\x3E' +
+                        '📁 Zmień folder' +
+                    '\x3C/button\x3E' +
+                '\x3C/div\x3E' +
+                '\x3Cdiv id="modalLogFolderLabel" style="font-size:0.78rem; font-weight:700; color:var(--primary); word-break:break-all; margin-bottom:6px;"\x3E' + escapeHTML(folderDisp) + '\x3C/div\x3E' +
+                '\x3Cdiv style="font-size:0.72rem; color:var(--text-muted); line-height:1.35;"\x3E' +
+                    '🟢 \x3Cstrong style="color:var(--open);"\x3EAutozapis aktywny:\x3C/strong\x3E logi dopisują się w tle co 5 sekund do: \x3Cstrong style="color:var(--text);"\x3E' + escapeHTML(trainFileName) + '\x3C/strong\x3E oraz zbiorczego \x3Cstrong style="color:var(--text);"\x3E' + escapeHTML(shiftFileName) + '\x3C/strong\x3E.' +
+                '\x3C/div\x3E' +
             '\x3C/div\x3E' +
+
             '\x3Cdiv style="display:flex; gap:6px; margin-bottom:10px; overflow-x:auto; padding-bottom:2px;"\x3E' +
                 '\x3Cbutton type="button" class="duty-filter-btn active" id="diagFilterAll" onclick="document.querySelectorAll(\'.duty-filter-btn\').forEach(b=>b.classList.remove(\'active\')); this.classList.add(\'active\'); window.renderDiagnosticLogsList(\'all\');"\x3EWszystkie\x3C/button\x3E' +
                 '\x3Cbutton type="button" class="duty-filter-btn" id="diagFilterGps" onclick="document.querySelectorAll(\'.duty-filter-btn\').forEach(b=>b.classList.remove(\'active\')); this.classList.add(\'active\'); window.renderDiagnosticLogsList(\'gps\');"\x3EGPS & Prędkość\x3C/button\x3E' +
@@ -867,6 +1043,9 @@ window.acknowledgeStationAlarm = () => {
     if (window._currentActiveAlertKey) {
         window._alarmAcknowledgedForKey.add(window._currentActiveAlertKey);
     }
+    if (typeof window.czuwakLog === 'function') {
+        window.czuwakLog('INFO', 'ALERT', 'Potwierdzono i wyciszono alarm stacyjny (klucz=' + (window._currentActiveAlertKey || 'brak') + ')');
+    }
     const ackBtn = document.getElementById('btnAckStationAlarm');
     if (ackBtn) {
         ackBtn.style.background = 'var(--open)';
@@ -1002,6 +1181,11 @@ window.triggerStationApproachAlert = (stationName, distanceKm, forceTest = false
     const isHandoverStation = (typeof window._crewDutyEndStationName === 'string' &&
         window._crewDutyEndStationName &&
         String(stationName).toUpperCase().trim() === window._crewDutyEndStationName);
+
+    if (typeof window.czuwakLog === 'function') {
+        const dStr = (typeof distanceKm === 'number') ? (distanceKm >= 1 ? distanceKm.toFixed(2) + ' km' : Math.round(distanceKm * 1000) + ' m') : '?';
+        window.czuwakLog('INFO', 'ALERT', 'Alarm zbliżania do stacji: ' + stationName + ' (' + dStr + (isEstimated ? ', tunel/estymacja' : '') + ', tryb=' + alertMode + (isHandoverStation ? ', STACJA ZMIANY DK' : '') + ')');
+    }
 
     // 2. Zsynchronizowana wibracja urządzenia (różny wzorzec dla stacji zmiany DK vs pośredniej)
     const hapticPattern = isHandoverStation
@@ -1219,6 +1403,9 @@ window.stopTrainTracking = () => {
 window.completeCrewDutyAndStopCzuwak = (stationName, reasonText = '') => {
     window._crewDutyCompleted = true;
     window.stopTrainTracking();
+    if (typeof window.czuwakLog === 'function') {
+        window.czuwakLog('INFO', 'STATION', 'Zakończono odcinek drużyny na stacji ' + (stationName || window._crewDutyEndStationName || 'stacja końcowa') + (reasonText ? (' (' + reasonText + ')') : ''));
+    }
 
     const bannerEl = document.getElementById('crewDutyStatusHeader');
     if (bannerEl) {
@@ -5804,6 +5991,9 @@ window.locateTrainByGPS = async (silent = false) => {
                 }
 
                 if (isHighConfidenceGps) {
+                    if (window._wasInTunnelEstimation && typeof window.czuwakLog === 'function') {
+                        window.czuwakLog('INFO', 'TUNNEL', 'Powrót sygnału GPS satelitarnego (dokładność ' + Math.round(accuracyMeters) + ' m). Zakończenie estymacji tunelowej.');
+                    }
                     window._wasInTunnelEstimation = false;
                 }
 
@@ -6011,14 +6201,20 @@ window.locateTrainByGPS = async (silent = false) => {
             hasCentered = true;
             if (!silent && btn) btn.innerHTML = originalIcon;
         },
-        () => {
+        (err) => {
+            if (typeof window.czuwakLog === 'function') {
+                window.czuwakLog('WARN', 'GPS', 'Brak natychmiastowego GPS: ' + (err ? (err.message || 'code=' + err.code) : 'timeout'));
+            }
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
                     processPosition(pos, false, !hasCentered);
                     hasCentered = true;
                     if (!silent && btn) btn.innerHTML = originalIcon;
                 },
-                () => {
+                (err2) => {
+                    if (typeof window.czuwakLog === 'function') {
+                        window.czuwakLog('WARN', 'GPS', 'Brak pozycji z sieci/BTS: ' + (err2 ? (err2.message || 'code=' + err2.code) : 'timeout'));
+                    }
                     window.showGpsSignalWarning('\x3Cstrong\x3EBrak sygnału GPS i BTS (np. tunel):\x3C/strong\x3E Czuwak oczekuje na sygnał i monitoruje trasę w tle...');
                     if (!silent && btn) btn.innerHTML = originalIcon;
                 },
@@ -6040,10 +6236,21 @@ window.locateTrainByGPS = async (silent = false) => {
                     processPosition(pos, true, false);
                 }
             },
-            (err) => console.warn("WatchPosition ostrzeżenie:", err),
+            (err) => {
+                const codeNames = { 1: 'PERMISSION_DENIED', 2: 'POSITION_UNAVAILABLE', 3: 'TIMEOUT' };
+                const cName = err ? (codeNames[err.code] || ('CODE_' + err.code)) : 'UNKNOWN';
+                if (typeof window.czuwakLog === 'function') {
+                    window.czuwakLog('WARN', 'GPS', 'Błąd watchPosition (' + cName + '): ' + (err && err.message ? err.message : 'brak szczegółów'));
+                }
+                console.warn("WatchPosition ostrzeżenie:", err);
+            },
             { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
         );
-    } catch (e) {}
+    } catch (e) {
+        if (typeof window.czuwakLog === 'function') {
+            window.czuwakLog('ERROR', 'GPS', 'Błąd uruchomienia watchPosition: ' + e.message);
+        }
+    }
 
     // 3. Inteligentny watchdog GPS (sprawdza czy watchPosition nie zawisł i w razie potrzeby sonduje)
     if (window._trainGpsPollInterval) clearInterval(window._trainGpsPollInterval);
@@ -6090,6 +6297,9 @@ window.locateTrainByGPS = async (silent = false) => {
         const secSinceLastFix = Math.round((Date.now() - window._lastValidGpsTimestamp) / 1000);
 
         if (secSinceLastFix >= 12 && window._lastActiveSegmentState) {
+            if (!window._wasInTunnelEstimation && typeof window.czuwakLog === 'function') {
+                window.czuwakLog('WARN', 'TUNNEL', 'Brak sygnału GPS od ' + secSinceLastFix + 's. Uruchomienie nawigacji inercyjnej w kierunku stacji ' + window._lastActiveSegmentState.segEnd.name);
+            }
             window._wasInTunnelEstimation = true;
             const st = window._lastActiveSegmentState;
             const tunnelSpeedKmH = Math.round(0.6 * (st.speedKmH || 80) + 0.4 * (st.scheduledSpeedKmH || 80));
@@ -6244,6 +6454,9 @@ if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App
 // ==========================================
 function bootApplication() {
     window.syncAlertConfigUI();
+    if (typeof window.syncLogFolderUI === 'function') {
+        window.syncLogFolderUI();
+    }
     if (typeof window.syncPendingWidgetEvents === 'function') {
         window.syncPendingWidgetEvents();
     }

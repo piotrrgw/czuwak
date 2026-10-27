@@ -515,6 +515,13 @@
                     <button id="btnOpenDiagnosticLogs" class="menu-btn menu-btn-secondary" onclick="window.openDiagnosticLogsModal()">
                         <span class="material-symbols-outlined" style="color:var(--primary);">terminal</span> Dziennik diagnostyczny (Logi GPS)
                     </button>
+                    <button id="btnPickLogFolder" class="menu-btn menu-btn-secondary" onclick="window.pickLogStorageFolder()" style="align-items: flex-start;">
+                        <span class="material-symbols-outlined" style="color:var(--primary); margin-top:2px;">folder_open</span>
+                        <div style="text-align: left; line-height: 1.25; min-width: 0;">
+                            <div style="font-weight: 800;">Folder zapisu logów na żywo</div>
+                            <div id="menuLogFolderLabel" style="font-size: 0.74rem; color: var(--text-muted); font-weight: 500; word-break: break-all;">Pobrane / Czuwak_Logi (Domyślny)</div>
+                        </div>
+                    </button>
                     <button class="menu-btn menu-btn-danger" onclick="window.hardReinstall()">
                         <span class="material-symbols-outlined">build</span> Twardy Reinstall (Wyczyść pamięć)
                     </button>
