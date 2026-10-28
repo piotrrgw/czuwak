@@ -745,6 +745,830 @@ window.clearAllDutyHistory = async function() {
 };
 
 // ==========================================
+// PLANER SŁUŻBY (MOJA SŁUŻBA - PLANOWANIE POCIĄGÓW Z DOMU I 1-TAP START)
+// ==========================================
+const CZUWAK_DUTY_PLAN_KEY = 'CZUWAK_DUTY_PLAN_V1';
+let _cachedDutyPlanStore = null;
+window._activeDutyPlanDate = localStorage.getItem('CZUWAK_ACTIVE_PLAN_DATE') || null;
+window._activeDutyPlanItemId = localStorage.getItem('CZUWAK_ACTIVE_PLAN_ITEM_ID') || null;
+window._plannerDraftTags = {};
+window._plannerLoadedTrain = null;
+
+async function getDutyPlanStore() {
+    if (_cachedDutyPlanStore && typeof _cachedDutyPlanStore === 'object') {
+        return _cachedDutyPlanStore;
+    }
+    try {
+        if (typeof localforage !== 'undefined') {
+            const store = await localforage.getItem(CZUWAK_DUTY_PLAN_KEY);
+            if (store && typeof store === 'object') {
+                _cachedDutyPlanStore = store;
+                return store;
+            }
+        }
+        const raw = localStorage.getItem(CZUWAK_DUTY_PLAN_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+                _cachedDutyPlanStore = parsed;
+                return parsed;
+            }
+        }
+    } catch (e) {}
+    _cachedDutyPlanStore = {};
+    return {};
+}
+
+async function saveDutyPlanStore(store) {
+    _cachedDutyPlanStore = store;
+    try {
+        if (typeof localforage !== 'undefined') {
+            await localforage.setItem(CZUWAK_DUTY_PLAN_KEY, store);
+        }
+        localStorage.setItem(CZUWAK_DUTY_PLAN_KEY, JSON.stringify(store));
+    } catch (e) {}
+}
+
+async function getDutyPlanForDate(dateStr) {
+    const store = await getDutyPlanStore();
+    return Array.isArray(store[dateStr]) ? store[dateStr] : [];
+}
+
+async function saveDutyPlanItem(dateStr, item) {
+    const store = await getDutyPlanStore();
+    if (!Array.isArray(store[dateStr])) {
+        store[dateStr] = [];
+    }
+    const idx = store[dateStr].findIndex(i => String(i.id) === String(item.id));
+    if (idx >= 0) {
+        store[dateStr][idx] = item;
+    } else {
+        store[dateStr].push(item);
+    }
+    await saveDutyPlanStore(store);
+    window.syncDutyPlanHomeCardUI();
+}
+
+async function deleteDutyPlanItem(dateStr, itemId) {
+    const store = await getDutyPlanStore();
+    if (Array.isArray(store[dateStr])) {
+        store[dateStr] = store[dateStr].filter(i => String(i.id) !== String(itemId));
+        await saveDutyPlanStore(store);
+    }
+    window.syncDutyPlanHomeCardUI();
+}
+
+window.deleteDutyPlanItemPrompt = async function(dateStr, itemId) {
+    if (!confirm('Czy na pewno chcesz usunąć ten pociąg z planu służby?')) return;
+    await deleteDutyPlanItem(dateStr, itemId);
+    window.openDutyPlannerModal(dateStr);
+};
+
+window.markDutyPlanItemCompleted = async function(dateStr, itemId, reasonText = '') {
+    const dStr = dateStr || window._activeDutyPlanDate || window.selectedTrainDepartureDate || getLocalYYYYMMDD(new Date());
+    const store = await getDutyPlanStore();
+    if (Array.isArray(store[dStr])) {
+        const item = store[dStr].find(i => String(i.id) === String(itemId));
+        if (item) {
+            item.status = 'completed';
+            item.completedAt = formatNowHHMMSS();
+            item.completionReason = reasonText || '';
+            await saveDutyPlanStore(store);
+        }
+    }
+    window._activeDutyPlanItemId = null;
+    try {
+        localStorage.removeItem('CZUWAK_ACTIVE_PLAN_ITEM_ID');
+    } catch (e) {}
+    window.syncDutyPlanHomeCardUI();
+};
+
+window.markDutyPlanItemCompletedByTrain = async function(dateStr, trainNum, reasonText = '') {
+    if (!trainNum) return;
+    const cleanNum = String(trainNum).trim();
+    const dStr = dateStr || window._activeDutyPlanDate || window.selectedTrainDepartureDate || getLocalYYYYMMDD(new Date());
+    const store = await getDutyPlanStore();
+    if (Array.isArray(store[dStr])) {
+        const item = store[dStr].find(i => String(i.trainNumber).trim() === cleanNum && i.status !== 'completed');
+        if (item) {
+            item.status = 'completed';
+            item.completedAt = formatNowHHMMSS();
+            item.completionReason = reasonText || '';
+            await saveDutyPlanStore(store);
+        }
+    }
+    window._activeDutyPlanItemId = null;
+    try {
+        localStorage.removeItem('CZUWAK_ACTIVE_PLAN_ITEM_ID');
+    } catch (e) {}
+    window.syncDutyPlanHomeCardUI();
+};
+
+window.launchPlannedTrain = async function(dateStr, itemId) {
+    const store = await getDutyPlanStore();
+    const items = store[dateStr] || [];
+    const item = items.find(i => String(i.id) === String(itemId));
+    if (!item) {
+        alert('Nie znaleziono wybranego pociągu w planie służby.');
+        return;
+    }
+
+    const cleanNum = String(item.trainNumber || '').trim();
+    if (!cleanNum) {
+        alert('Błędny numer pociągu w planie.');
+        return;
+    }
+
+    window._activeDutyPlanDate = dateStr;
+    window._activeDutyPlanItemId = String(item.id);
+    try {
+        localStorage.setItem('CZUWAK_ACTIVE_PLAN_DATE', dateStr);
+        localStorage.setItem('CZUWAK_ACTIVE_PLAN_ITEM_ID', String(item.id));
+    } catch (e) {}
+
+    window.selectedTrainDepartureDate = dateStr;
+    try {
+        localStorage.setItem('CZUWAK_SELECTED_DEPARTURE_DATE', dateStr);
+    } catch (e) {}
+    window.syncTrainDateButtonsUI();
+
+    if (item.tags && typeof item.tags === 'object') {
+        Object.keys(item.tags).forEach(stKey => {
+            const tagVal = item.tags[stKey];
+            const numIdx = parseInt(stKey, 10);
+            if (!isNaN(numIdx)) {
+                localStorage.setItem(getStationTagStorageKey(cleanNum, numIdx), tagVal);
+            }
+            localStorage.setItem(getStationTagByNameStorageKey(cleanNum, stKey), tagVal);
+        });
+    }
+
+    if (typeof item.startStationIdx === 'number' && typeof item.endStationIdx === 'number') {
+        try {
+            localStorage.setItem('CZUWAK_DUTY_SEG_' + cleanNum, JSON.stringify({
+                startIdx: item.startStationIdx,
+                endIdx: item.endStationIdx
+            }));
+        } catch (e) {}
+    }
+
+    item.status = 'active';
+    await saveDutyPlanStore(store);
+
+    window.closeCzuwakSheet();
+
+    window.stopTrainTracking();
+    window._configPanelForceExpanded = true;
+    window.switchMode('train');
+    window.switchTrainMode('number');
+    const trIn = document.getElementById('trainInput');
+    if (trIn) {
+        trIn.value = cleanNum;
+        try { trIn.blur(); } catch (e) {}
+    }
+    window.lastSearchedTrainNum = cleanNum;
+    window.forceExactTrainMatch = true;
+
+    window.findTrainForConfiguration(true);
+
+    if (typeof window.showActionToast === 'function') {
+        window.showActionToast('🚀 Uruchomiono pociąg #' + cleanNum + ' (' + (item.startStationName || '') + ' \u2794 ' + (item.endStationName || '') + ')');
+    }
+    window.syncDutyPlanHomeCardUI();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.syncDutyPlanHomeCardUI = async function() {
+    const cardEl = document.getElementById('activeDutyPlanHomeCard');
+    if (!cardEl) return;
+
+    if (window._currentTrainObject) {
+        cardEl.style.display = 'none';
+        return;
+    }
+
+    const todayStr = getLocalYYYYMMDD(new Date());
+    const selectedDate = window.selectedTrainDepartureDate || todayStr;
+    const store = await getDutyPlanStore();
+
+    let planItems = store[selectedDate] || [];
+    let dateUsed = selectedDate;
+    if (planItems.length === 0 && selectedDate !== todayStr && store[todayStr] && store[todayStr].length > 0) {
+        planItems = store[todayStr];
+        dateUsed = todayStr;
+    }
+
+    if (!Array.isArray(planItems) || planItems.length === 0) {
+        cardEl.innerHTML =
+            '\x3Cdiv style="background:rgba(2, 132, 199, 0.08); border:1.5px dashed rgba(2, 132, 199, 0.35); border-radius:12px; padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;" onclick="window.openDutyPlannerModal()"\x3E' +
+                '\x3Cdiv style="display:flex; align-items:center; gap:10px; min-width:0;"\x3E' +
+                    '\x3Cdiv style="width:38px; height:38px; border-radius:8px; background:rgba(2,132,199,0.18); display:flex; align-items:center; justify-content:center; color:var(--primary); flex-shrink:0;"\x3E' +
+                        '\x3Cspan class="material-symbols-outlined"\x3Ecalendar_month\x3C/span\x3E' +
+                    '\x3C/div\x3E' +
+                    '\x3Cdiv style="min-width:0;"\x3E' +
+                        '\x3Cdiv style="font-weight:800; font-size:0.9rem; color:var(--text);"\x3EPlaner służby (Moja Służba)\x3C/div\x3E' +
+                        '\x3Cdiv style="font-size:0.75rem; color:var(--text-muted); margin-top:1px;"\x3EZaplanuj pociągi z domu i startuj na peronie 1 dotknięciem!\x3C/div\x3E' +
+                    '\x3C/div\x3E' +
+                '\x3C/div\x3E' +
+                '\x3Cbutton type="button" class="menu-btn menu-btn-primary" style="min-height:38px; padding:4px 12px; font-size:0.78rem; font-weight:800; flex-shrink:0; justify-content:center;"\x3E+ Zaplanuj\x3C/button\x3E' +
+            '\x3C/div\x3E';
+        cardEl.style.display = 'block';
+        return;
+    }
+
+    const totalCount = planItems.length;
+    const completedCount = planItems.filter(i => i.status === 'completed').length;
+    const pendingItem = planItems.find(i => i.status !== 'completed');
+
+    if (!pendingItem) {
+        cardEl.innerHTML =
+            '\x3Cdiv style="background:rgba(34, 197, 94, 0.12); border:1.5px solid #22c55e; border-radius:12px; padding:12px 14px; margin-bottom:4px;"\x3E' +
+                '\x3Cdiv style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;"\x3E' +
+                    '\x3Cdiv style="display:flex; align-items:center; gap:8px; color:#4ade80; font-weight:800; font-size:0.92rem;"\x3E' +
+                        '\x3Cspan class="material-symbols-outlined"\x3Everified\x3C/span\x3E' +
+                        'Służba na dzień ' + escapeHTML(dateUsed) + ' zrealizowana! (' + totalCount + ' pociągi obsłużone)' +
+                    '\x3C/div\x3E' +
+                    '\x3Cdiv style="display:flex; gap:6px;"\x3E' +
+                        '\x3Cbutton type="button" onclick="window.openDutyHistoryModal()" class="menu-btn menu-btn-secondary" style="min-height:38px; font-size:0.78rem; padding:4px 10px; font-weight:800;"\x3EHistoria\x3C/button\x3E' +
+                        '\x3Cbutton type="button" data-date="' + escapeHTML(dateUsed) + '" onclick="window.openDutyPlannerModal(this.dataset.date)" class="menu-btn menu-btn-primary" style="min-height:38px; font-size:0.78rem; padding:4px 10px; font-weight:800;"\x3EPlaner\x3C/button\x3E' +
+                    '\x3C/div\x3E' +
+                '\x3C/div\x3E' +
+            '\x3C/div\x3E';
+        cardEl.style.display = 'block';
+        return;
+    }
+
+    const curIndex = planItems.indexOf(pendingItem);
+    const trNum = pendingItem.trainNumber || '';
+    const trName = pendingItem.trainName ? (' ' + pendingItem.trainName) : '';
+    const startName = pendingItem.startStationName || 'Początek';
+    const endName = pendingItem.endStationName || 'Koniec';
+    const depTime = pendingItem.depTime ? (' (' + pendingItem.depTime + ')') : '';
+    const arrTime = pendingItem.arrTime ? (' (' + pendingItem.arrTime + ')') : '';
+
+    let tagBadgesHtml = '';
+    if (pendingItem.tags && typeof pendingItem.tags === 'object') {
+        Object.keys(pendingItem.tags).forEach(k => {
+            const t = pendingItem.tags[k];
+            if (!t) return;
+            const isP115 = /p115/i.test(t);
+            const badgeBg = isP115 ? 'rgba(239, 68, 68, 0.18)' : 'rgba(236, 72, 153, 0.18)';
+            const badgeBorder = isP115 ? '#ef4444' : '#ec4899';
+            const badgeColor = isP115 ? '#fca5a5' : '#f472b6';
+            tagBadgesHtml += '\x3Cspan style="display:inline-flex; align-items:center; gap:3px; background:' + badgeBg + '; border:1px solid ' + badgeBorder + '; color:' + badgeColor + '; padding:2px 6px; border-radius:6px; font-size:0.7rem; font-weight:800;"\x3E' +
+                escapeHTML(k) + ': ' + escapeHTML(t) +
+            '\x3C/span\x3E ';
+        });
+    }
+
+    let prevCompletedHtml = '';
+    if (completedCount > 0) {
+        const completedTrains = planItems.filter(i => i.status === 'completed');
+        let prevPills = '';
+        completedTrains.forEach(ct => {
+            prevPills += '\x3Cspan style="display:inline-block; background:rgba(34,197,94,0.15); border:1px solid #22c55e; color:#4ade80; border-radius:4px; padding:1px 6px; font-size:0.68rem; font-weight:800;"\x3E✓ #' + escapeHTML(ct.trainNumber) + ' (' + escapeHTML(ct.completedAt || 'zrobiony') + ')\x3C/span\x3E ';
+        });
+        prevCompletedHtml = '\x3Cdiv style="margin-bottom:8px; font-size:0.75rem; color:var(--text-muted); display:flex; align-items:center; gap:6px; flex-wrap:wrap;"\x3E' +
+            'Zrealizowane: ' + prevPills +
+        '\x3C/div\x3E';
+    }
+
+    cardEl.innerHTML =
+        '\x3Cdiv style="background:linear-gradient(135deg, rgba(2, 132, 199, 0.14), rgba(37, 99, 235, 0.18)); border:1.5px solid var(--primary); border-radius:14px; padding:14px; box-shadow:0 4px 14px rgba(2, 132, 199, 0.2);"\x3E' +
+            '\x3Cdiv style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"\x3E' +
+                '\x3Cdiv style="display:inline-flex; align-items:center; gap:6px; background:rgba(2, 132, 199, 0.25); border:1px solid var(--primary); border-radius:999px; padding:2px 10px; font-size:0.75rem; font-weight:900; color:#38bdf8; letter-spacing:0.3px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined" style="font-size:0.95rem;"\x3Eevent_available\x3C/span\x3E PLAN SŁUŻBY (' + (curIndex + 1) + ' z ' + totalCount + ')' +
+                '\x3C/div\x3E' +
+                '\x3Cbutton type="button" data-date="' + escapeHTML(dateUsed) + '" onclick="window.openDutyPlannerModal(this.dataset.date)" style="background:transparent; border:none; color:var(--primary); font-weight:800; font-size:0.76rem; cursor:pointer; display:inline-flex; align-items:center; gap:2px; padding:2px 4px;"\x3E' +
+                    'Wszystkie (' + totalCount + ') \u2794' +
+                '\x3C/button\x3E' +
+            '\x3C/div\x3E' +
+            prevCompletedHtml +
+            '\x3Cdiv style="margin-bottom:10px;"\x3E' +
+                '\x3Cdiv style="font-size:1.15rem; font-weight:900; color:var(--text); display:flex; align-items:center; gap:6px;"\x3E' +
+                    '\x3Cspan style="color:var(--primary); font-weight:900;"\x3E#' + escapeHTML(trNum) + '\x3C/span\x3E' +
+                    '\x3Cspan\x3E' + escapeHTML(trName) + '\x3C/span\x3E' +
+                '\x3C/div\x3E' +
+                '\x3Cdiv style="font-size:0.82rem; color:var(--text); margin-top:3px; line-height:1.4;"\x3E' +
+                    'Odcinek DK: \x3Cstrong style="color:var(--text);"\x3E' + escapeHTML(startName) + escapeHTML(depTime) + '\x3C/strong\x3E \u2794 \x3Cstrong style="color:var(--text);"\x3E' + escapeHTML(endName) + escapeHTML(arrTime) + '\x3C/strong\x3E' +
+                '\x3C/div\x3E' +
+                (tagBadgesHtml ? ('\x3Cdiv style="margin-top:6px; display:flex; flex-wrap:wrap; gap:4px;"\x3E' + tagBadgesHtml + '\x3C/div\x3E') : '') +
+            '\x3C/div\x3E' +
+            '\x3Cdiv style="display:flex; gap:8px;"\x3E' +
+                '\x3Cbutton type="button" data-date="' + escapeHTML(dateUsed) + '" data-itemid="' + escapeHTML(pendingItem.id) + '" onclick="window.launchPlannedTrain(this.dataset.date, this.dataset.itemid)" class="menu-btn menu-btn-primary" style="flex:1; min-height:48px; font-size:0.95rem; font-weight:900; justify-content:center; gap:8px; background:linear-gradient(135deg, #0284c7, #2563eb); border-color:#38bdf8; box-shadow:0 4px 12px rgba(37,99,235,0.35);"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined" style="font-size:1.25rem;"\x3Erocket_launch\x3C/span\x3E Uruchom pociąg #' + escapeHTML(trNum) + ' (1-Tap)' +
+                '\x3C/button\x3E' +
+            '\x3C/div\x3E' +
+        '\x3C/div\x3E';
+    cardEl.style.display = 'block';
+};
+
+window.openDutyPlannerModal = async function(targetDateStr = null) {
+    window.closeCzuwakSheet();
+    const curDate = targetDateStr || window.selectedTrainDepartureDate || getLocalYYYYMMDD(new Date());
+    const store = await getDutyPlanStore();
+    const items = Array.isArray(store[curDate]) ? store[curDate] : [];
+
+    const overlay = document.createElement('div');
+    overlay.id = 'czuwakSheetOverlay';
+    overlay.className = 'czuwak-sheet-overlay';
+    overlay.onclick = (e) => { if (e.target === overlay) window.closeCzuwakSheet(); };
+
+    const now = new Date();
+    const yesterdayStr = getLocalYYYYMMDD(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+    const todayStr = getLocalYYYYMMDD(now);
+    const tomorrowStr = getLocalYYYYMMDD(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+
+    let itemsHtml = '';
+    if (items.length === 0) {
+        itemsHtml =
+            '\x3Cdiv style="text-align:center; padding:30px 15px; color:var(--text-muted); font-size:0.88rem; background:rgba(255,255,255,0.02); border:1px dashed var(--glass-border); border-radius:12px; margin-bottom:12px;"\x3E' +
+                '\x3Cspan class="material-symbols-outlined" style="font-size:3rem; opacity:0.4; display:block; margin-bottom:8px; color:var(--primary);"\x3Eedit_calendar\x3C/span\x3E' +
+                'Brak zaplanowanych pociągów na dzień \x3Cstrong style="color:var(--text);"\x3E' + escapeHTML(curDate) + '\x3C/strong\x3E.\x3Cbr\x3E' +
+                'Przygotuj pociągi w domu przed służbą, dodając numery, odcinek DK, procedurę P115 i znaczniki (PRM), aby na peronie startować 1 kliknięciem bez wpisywania i szukania!\x3C/div\x3E';
+    } else {
+        items.forEach((item, idx) => {
+            let statusPill = '';
+            if (item.status === 'completed') {
+                statusPill = '\x3Cspan style="background:rgba(34, 197, 94, 0.16); border:1px solid #22c55e; color:#4ade80; border-radius:999px; padding:2px 8px; font-size:0.7rem; font-weight:800;"\x3E✓ Zakończony' + (item.completedAt ? (' (' + escapeHTML(item.completedAt) + ')') : '') + '\x3C/span\x3E';
+            } else if (item.status === 'active') {
+                statusPill = '\x3Cspan style="background:rgba(2, 132, 199, 0.2); border:1px solid var(--primary); color:#38bdf8; border-radius:999px; padding:2px 8px; font-size:0.7rem; font-weight:800;"\x3E🔵 Aktywny na szlaku\x3C/span\x3E';
+            } else {
+                statusPill = '\x3Cspan style="background:rgba(245, 158, 11, 0.16); border:1px solid #f59e0b; color:#fbbf24; border-radius:999px; padding:2px 8px; font-size:0.7rem; font-weight:800;"\x3E⏳ Oczekuje (' + (idx + 1) + '/' + items.length + ')\x3C/span\x3E';
+            }
+
+            let tagsHtml = '';
+            if (item.tags && typeof item.tags === 'object') {
+                Object.keys(item.tags).forEach(k => {
+                    const t = item.tags[k];
+                    if (!t) return;
+                    const isP115 = /p115/i.test(t);
+                    const tagStyle = isP115
+                        ? 'background:rgba(239, 68, 68, 0.18); border:1px solid #ef4444; color:#fca5a5;'
+                        : 'background:rgba(236, 72, 153, 0.18); border:1px solid #ec4899; color:#f472b6;';
+                    tagsHtml += '\x3Cspan style="display:inline-flex; align-items:center; gap:3px; border-radius:6px; padding:2px 6px; font-size:0.7rem; font-weight:800; ' + tagStyle + '"\x3E' +
+                        escapeHTML(k) + ': ' + escapeHTML(t) +
+                    '\x3C/span\x3E ';
+                });
+            }
+
+            const trNum = item.trainNumber || '';
+            const trName = item.trainName ? (' ' + item.trainName) : '';
+            const startName = item.startStationName || 'Start';
+            const endName = item.endStationName || 'Koniec';
+            const depTime = item.depTime ? (' (' + item.depTime + ')') : '';
+            const arrTime = item.arrTime ? (' (' + item.arrTime + ')') : '';
+
+            itemsHtml +=
+                '\x3Cdiv class="history-card" style="background:var(--input-bg); border:1.5px solid var(--glass-border); border-radius:12px; padding:12px; margin-bottom:10px;"\x3E' +
+                    '\x3Cdiv style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; gap:8px;"\x3E' +
+                        '\x3Cdiv\x3E' +
+                            '\x3Cdiv style="display:flex; align-items:center; gap:6px;"\x3E' +
+                                '\x3Cspan style="font-weight:900; font-size:1.05rem; color:var(--primary);"\x3E#' + escapeHTML(trNum) + '\x3C/span\x3E' +
+                                '\x3Cspan style="font-weight:800; font-size:0.95rem; color:var(--text);"\x3E' + escapeHTML(trName) + '\x3C/span\x3E' +
+                            '\x3C/div\x3E' +
+                            '\x3Cdiv style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;"\x3E' +
+                                'Odcinek DK: \x3Cstrong style="color:var(--text);"\x3E' + escapeHTML(startName) + escapeHTML(depTime) + ' \u2794 ' + escapeHTML(endName) + escapeHTML(arrTime) + '\x3C/strong\x3E' +
+                            '\x3C/div\x3E' +
+                        '\x3C/div\x3E' +
+                        '\x3Cdiv style="text-align:right;"\x3E' + statusPill + '\x3C/div\x3E' +
+                    '\x3C/div\x3E' +
+                    (tagsHtml ? ('\x3Cdiv style="margin-bottom:8px; display:flex; flex-wrap:wrap; gap:4px;"\x3E' + tagsHtml + '\x3C/div\x3E') : '') +
+                    '\x3Cdiv style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;"\x3E' +
+                        '\x3Cbutton type="button" data-date="' + escapeHTML(curDate) + '" data-itemid="' + escapeHTML(item.id) + '" onclick="window.launchPlannedTrain(this.dataset.date, this.dataset.itemid)" class="menu-btn menu-btn-primary" style="flex:2; min-height:42px; font-size:0.82rem; font-weight:900; justify-content:center; gap:4px;"\x3E' +
+                            '\x3Cspan class="material-symbols-outlined" style="font-size:1rem;"\x3Erocket_launch\x3C/span\x3E Uruchom (1-Tap)' +
+                        '\x3C/button\x3E' +
+                        '\x3Cbutton type="button" data-date="' + escapeHTML(curDate) + '" data-itemid="' + escapeHTML(item.id) + '" onclick="window.openAddTrainToPlanModal(this.dataset.date, this.dataset.itemid)" class="menu-btn menu-btn-secondary" style="flex:1; min-height:42px; font-size:0.78rem; font-weight:800; justify-content:center; padding:4px 8px;"\x3E' +
+                            'Edytuj' +
+                        '\x3C/button\x3E' +
+                        '\x3Cbutton type="button" data-date="' + escapeHTML(curDate) + '" data-itemid="' + escapeHTML(item.id) + '" onclick="window.deleteDutyPlanItemPrompt(this.dataset.date, this.dataset.itemid)" style="background:transparent; border:none; color:#f87171; cursor:pointer; padding:6px 8px; font-weight:800; font-size:0.75rem;" title="Usuń z planu"\x3E' +
+                            'Usuń' +
+                        '\x3C/button\x3E' +
+                    '\x3C/div\x3E' +
+                '\x3C/div\x3E';
+        });
+    }
+
+    overlay.innerHTML =
+        '\x3Cdiv class="czuwak-sheet-content" style="max-height:92vh;"\x3E' +
+            '\x3Cdiv style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"\x3E' +
+                '\x3Cdiv style="font-size:1.05rem; font-weight:900; color:var(--text); display:flex; align-items:center; gap:6px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined" style="color:var(--primary);"\x3Ecalendar_month\x3C/span\x3E Planer służby (Moje pociągi)' +
+                    '\x3Cspan style="font-size:0.75rem; font-weight:800; background:rgba(2,132,199,0.18); border:1px solid var(--primary); color:var(--primary); padding:1px 7px; border-radius:999px;"\x3E' + items.length + '\x3C/span\x3E' +
+                '\x3C/div\x3E' +
+                '\x3Cbutton type="button" onclick="window.closeCzuwakSheet()" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; padding:4px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined"\x3Eclose\x3C/span\x3E' +
+                '\x3C/button\x3E' +
+            '\x3C/div\x3E' +
+
+            // WYBÓR DATY SŁUŻBY
+            '\x3Cdiv style="background:var(--input-bg); border:1px solid var(--glass-border); border-radius:10px; padding:8px 10px; margin-bottom:12px;"\x3E' +
+                '\x3Cdiv style="display:flex; gap:6px; margin-bottom:6px;"\x3E' +
+                    '\x3Cbutton type="button" data-date="' + escapeHTML(yesterdayStr) + '" onclick="window.openDutyPlannerModal(this.dataset.date)" class="date-quick-btn' + (curDate === yesterdayStr ? ' active' : '') + '" style="flex:1;"\x3EWczoraj\x3C/button\x3E' +
+                    '\x3Cbutton type="button" data-date="' + escapeHTML(todayStr) + '" onclick="window.openDutyPlannerModal(this.dataset.date)" class="date-quick-btn' + (curDate === todayStr ? ' active' : '') + '" style="flex:1;"\x3EDzisiaj\x3C/button\x3E' +
+                    '\x3Cbutton type="button" data-date="' + escapeHTML(tomorrowStr) + '" onclick="window.openDutyPlannerModal(this.dataset.date)" class="date-quick-btn' + (curDate === tomorrowStr ? ' active' : '') + '" style="flex:1;"\x3EJutro\x3C/button\x3E' +
+                '\x3C/div\x3E' +
+                '\x3Cinput type="date" value="' + escapeHTML(curDate) + '" onchange="window.openDutyPlannerModal(this.value)" style="width:100%; margin-bottom:0; padding:6px 10px; font-weight:700; font-size:0.88rem;"\x3E' +
+            '\x3C/div\x3E' +
+
+            '\x3Cdiv style="max-height:55vh; overflow-y:auto; padding-right:2px;"\x3E' + itemsHtml + '\x3C/div\x3E' +
+
+            '\x3Cdiv style="display:flex; gap:8px; margin-top:12px;"\x3E' +
+                '\x3Cbutton type="button" data-date="' + escapeHTML(curDate) + '" onclick="window.openAddTrainToPlanModal(this.dataset.date)" class="menu-btn menu-btn-primary" style="flex:2; min-height:48px; font-weight:900; font-size:0.95rem; justify-content:center; gap:6px; background:linear-gradient(135deg, #0284c7, #2563eb); border-color:#38bdf8;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined"\x3Eadd_circle\x3C/span\x3E + Dodaj pociąg do służby' +
+                '\x3C/button\x3E' +
+                '\x3Cbutton type="button" onclick="window.closeCzuwakSheet()" class="menu-btn menu-btn-secondary" style="flex:1; min-height:48px; font-weight:800; justify-content:center;"\x3E' +
+                    'Zamknij' +
+                '\x3C/button\x3E' +
+            '\x3C/div\x3E' +
+        '\x3C/div\x3E';
+
+    document.body.appendChild(overlay);
+};
+
+window.openAddTrainToPlanModal = async function(targetDateStr, editItemId = null) {
+    window.closeCzuwakSheet();
+    const curDate = targetDateStr || window.selectedTrainDepartureDate || getLocalYYYYMMDD(new Date());
+
+    window._plannerDraftTags = {};
+    window._plannerLoadedTrain = null;
+    let prefilledNum = '';
+    let savedStart = 0;
+    let savedEnd = null;
+
+    if (editItemId) {
+        const store = await getDutyPlanStore();
+        const items = store[curDate] || [];
+        const existing = items.find(i => String(i.id) === String(editItemId));
+        if (existing) {
+            prefilledNum = existing.trainNumber || '';
+            savedStart = existing.startStationIdx || 0;
+            savedEnd = existing.endStationIdx || null;
+            if (existing.tags && typeof existing.tags === 'object') {
+                window._plannerDraftTags = Object.assign({}, existing.tags);
+            }
+        }
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'czuwakSheetOverlay';
+    overlay.className = 'czuwak-sheet-overlay';
+    overlay.onclick = (e) => { if (e.target === overlay) window.closeCzuwakSheet(); };
+
+    overlay.innerHTML =
+        '\x3Cdiv class="czuwak-sheet-content" style="max-height:92vh;"\x3E' +
+            '\x3Cdiv style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"\x3E' +
+                '\x3Cdiv style="font-size:1.05rem; font-weight:900; color:var(--text); display:flex; align-items:center; gap:6px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined" style="color:var(--primary);"\x3E' + (editItemId ? 'edit' : 'add_circle') + '\x3C/span\x3E ' +
+                    (editItemId ? 'Edytuj pociąg w służbie' : 'Zaplanuj pociąg do służby') +
+                '\x3C/div\x3E' +
+                '\x3Cbutton type="button" data-date="' + escapeHTML(curDate) + '" onclick="window.openDutyPlannerModal(this.dataset.date)" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; padding:4px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined"\x3Eclose\x3C/span\x3E' +
+                '\x3C/button\x3E' +
+            '\x3C/div\x3E' +
+
+            '\x3Cdiv style="font-size:0.78rem; color:var(--text-muted); margin-bottom:12px;"\x3E' +
+                'Data służby: \x3Cstrong style="color:var(--primary); font-size:0.86rem;"\x3E' + escapeHTML(curDate) + '\x3C/strong\x3E' +
+            '\x3C/div\x3E' +
+
+            // KROK 1: NUMER LUB NAZWA POCIĄGU
+            '\x3Cdiv style="background:var(--input-bg); border:1px solid var(--glass-border); border-radius:10px; padding:10px 12px; margin-bottom:12px;"\x3E' +
+                '\x3Clabel for="plannerTrainInput" style="display:block; font-size:0.82rem; font-weight:800; color:var(--text); margin-bottom:6px;"\x3E1. Wpisz numer lub nazwę pociągu:\x3C/label\x3E' +
+                '\x3Cdiv style="display:flex; gap:6px;"\x3E' +
+                    '\x3Cinput type="text" id="plannerTrainInput" list="trainsDictionary" value="' + escapeHTML(prefilledNum) + '" placeholder="np. 14101 lub HUTNIK..." onchange="window.plannerLoadTrainDetails(this.value)" style="flex:1; margin-bottom:0; font-weight:800; font-size:0.95rem; min-height:44px;"\x3E' +
+                    '\x3Cbutton type="button" onclick="window.plannerLoadTrainDetails(document.getElementById(\'plannerTrainInput\').value)" class="menu-btn menu-btn-primary" style="min-height:44px; padding:4px 12px; font-weight:800; font-size:0.8rem; flex-shrink:0;"\x3EWczytaj\x3C/button\x3E' +
+                '\x3C/div\x3E' +
+            '\x3C/div\x3E' +
+
+            // KROK 2 & 3: KONTENER Z TRASĄ, ODCINKIEM DK I STACJAMI
+            '\x3Cdiv id="plannerTrainDetailsSection" style="display:none;"\x3E' +
+                '\x3Cdiv style="background:rgba(2, 132, 199, 0.08); border:1px solid rgba(2, 132, 199, 0.3); border-radius:10px; padding:10px 12px; margin-bottom:12px;"\x3E' +
+                    '\x3Cdiv style="font-size:0.84rem; font-weight:800; color:var(--primary); margin-bottom:8px; display:flex; align-items:center; gap:5px;"\x3E' +
+                        '\x3Cspan class="material-symbols-outlined" style="font-size:1.1rem;"\x3Ebadge\x3C/span\x3E 2. Wybierz swój odcinek obsługi DK:' +
+                    '\x3C/div\x3E' +
+                    '\x3Cdiv style="margin-bottom:8px;"\x3E' +
+                        '\x3Clabel style="display:block; font-size:0.75rem; font-weight:700; color:var(--text-muted); margin-bottom:3px;"\x3EStacja objęcia pociągu (Start DK):\x3C/label\x3E' +
+                        '\x3Cselect id="plannerDutyStartSelect" onchange="window.plannerOnStationDutyChange()" style="width:100%; min-height:44px; font-weight:700; font-size:0.88rem; background:var(--input-bg); color:var(--text); border:1px solid var(--input-border); border-radius:8px; padding:6px 10px;"\x3E\x3C/select\x3E' +
+                    '\x3C/div\x3E' +
+                    '\x3Cdiv\x3E' +
+                        '\x3Clabel style="display:block; font-size:0.75rem; font-weight:700; color:var(--text-muted); margin-bottom:3px;"\x3EStacja zdania pociągu (Zmiana DK):\x3C/label\x3E' +
+                        '\x3Cselect id="plannerDutyEndSelect" onchange="window.plannerOnStationDutyChange()" style="width:100%; min-height:44px; font-weight:700; font-size:0.88rem; background:var(--input-bg); color:var(--text); border:1px solid var(--input-border); border-radius:8px; padding:6px 10px;"\x3E\x3C/select\x3E' +
+                    '\x3C/div\x3E' +
+                '\x3C/div\x3E' +
+
+                '\x3Cdiv style="margin-bottom:12px;"\x3E' +
+                    '\x3Cdiv style="font-size:0.84rem; font-weight:800; color:var(--text); margin-bottom:6px; display:flex; align-items:center; justify-content:space-between;"\x3E' +
+                        '\x3Cspan\x3E3. Stacje odcinka DK (Procedura P115 i znaczniki):\x3C/span\x3E' +
+                    '\x3C/div\x3E' +
+                    '\x3Cdiv style="max-height:30vh; overflow-y:auto; border:1px solid var(--glass-border); border-radius:10px; background:rgba(0,0,0,0.15);"\x3E' +
+                        '\x3Ctable style="width:100%; border-collapse:collapse; font-size:0.78rem;"\x3E' +
+                            '\x3Ctbody id="plannerStationsChecklist"\x3E\x3C/tbody\x3E' +
+                        '\x3C/table\x3E' +
+                    '\x3C/div\x3E' +
+                    '\x3Cdiv style="font-size:0.72rem; color:var(--text-muted); margin-top:4px;"\x3EKliknij \x22+ P115 / Notatka\x22 przy stacji, aby ustawić mruganie ekranu P115 z numerami wagonów lub znacznik PRM.\x3C/div\x3E' +
+                '\x3C/div\x3E' +
+
+                '\x3Cdiv style="display:flex; gap:8px;"\x3E' +
+                    '\x3Cbutton type="button" data-date="' + escapeHTML(curDate) + '" data-editid="' + escapeHTML(editItemId || '') + '" onclick="window.saveCurrentTrainToPlan(this.dataset.date, this.dataset.editid)" class="menu-btn menu-btn-primary" style="flex:2; min-height:48px; font-weight:900; font-size:0.95rem; justify-content:center; gap:6px; background:linear-gradient(135deg, #059669, #10b981); border-color:#34d399;"\x3E' +
+                        '\x3Cspan class="material-symbols-outlined"\x3Esave\x3C/span\x3E Zapisz w planie służby' +
+                    '\x3C/button\x3E' +
+                    '\x3Cbutton type="button" data-date="' + escapeHTML(curDate) + '" onclick="window.openDutyPlannerModal(this.dataset.date)" class="menu-btn menu-btn-secondary" style="flex:1; min-height:48px; font-weight:800; justify-content:center;"\x3E' +
+                        'Anuluj' +
+                    '\x3C/button\x3E' +
+                '\x3C/div\x3E' +
+            '\x3C/div\x3E' +
+        '\x3C/div\x3E';
+
+    document.body.appendChild(overlay);
+
+    if (prefilledNum) {
+        window.plannerLoadTrainDetails(prefilledNum);
+        if (savedEnd !== null) {
+            window.plannerRenderDutySelectors(window._plannerLoadedTrain, savedStart, savedEnd);
+        }
+    }
+};
+
+window.plannerLoadTrainDetails = function(rawInput) {
+    if (!rawInput) return;
+    const cleanNum = rawInput.includes(' | ') ? rawInput.split(' | ')[0].trim() : rawInput.trim();
+    if (!cleanNum) return;
+
+    if (!bazaPociagow || bazaPociagow.length === 0) {
+        alert('Baza pociągów nie została jeszcze załadowana.');
+        return;
+    }
+
+    let matches = bazaPociagow.filter(p => String(p.numer) === cleanNum);
+    if (matches.length === 0) {
+        matches = bazaPociagow.filter(p => p.nazwa && String(p.nazwa).toUpperCase() === cleanNum.toUpperCase());
+    }
+    if (matches.length === 0) {
+        matches = bazaPociagow.filter(p => p.nazwa && String(p.nazwa).toUpperCase().includes(cleanNum.toUpperCase()));
+    }
+    if (matches.length === 0) {
+        alert('Nie znaleziono pociągu: ' + cleanNum);
+        return;
+    }
+
+    const train = matches[0];
+    window._plannerLoadedTrain = train;
+    window.plannerRenderDutySelectors(train);
+};
+
+window.plannerRenderDutySelectors = function(train, savedStartIdx = 0, savedEndIdx = null) {
+    if (!train) return;
+    const stacjeArray = Array.isArray(train.stacje) ? train.stacje : Object.values(train.stacje || {});
+    if (stacjeArray.length < 2) {
+        alert('Ten pociąg nie ma listy stacji.');
+        return;
+    }
+
+    const totalStations = stacjeArray.length;
+    const sIdx = Math.max(0, Math.min(totalStations - 2, savedStartIdx));
+    const eIdx = (savedEndIdx !== null && savedEndIdx !== undefined)
+        ? Math.max(sIdx + 1, Math.min(totalStations - 1, savedEndIdx))
+        : (totalStations - 1);
+
+    const startSel = document.getElementById('plannerDutyStartSelect');
+    const endSel = document.getElementById('plannerDutyEndSelect');
+    const boxEl = document.getElementById('plannerTrainDetailsSection');
+    if (!startSel || !endSel || !boxEl) return;
+
+    let startOpts = '';
+    let endOpts = '';
+    stacjeArray.forEach((st, idx) => {
+        const sName = (typeof st === 'object' && st.nazwa) ? st.nazwa : ('Stacja ' + (idx + 1));
+        const depStr = (typeof st === 'object' && st.odjazd && st.odjazd !== '-') ? (' (odj. ' + st.odjazd + ')') : '';
+        const arrStr = (typeof st === 'object' && st.przyjazd && st.przyjazd !== '-') ? (' (przyj. ' + st.przyjazd + ')') : '';
+
+        if (idx < totalStations - 1) {
+            startOpts += '\x3Coption value="' + idx + '"' + (idx === sIdx ? ' selected' : '') + '\x3E' +
+                (idx + 1) + '. ' + escapeHTML(sName + depStr) + '\x3C/option\x3E';
+        }
+        if (idx > 0) {
+            endOpts += '\x3Coption value="' + idx + '"' + (idx === eIdx ? ' selected' : '') + '\x3E' +
+                (idx + 1) + '. ' + escapeHTML(sName + arrStr) + '\x3C/option\x3E';
+        }
+    });
+
+    startSel.innerHTML = startOpts;
+    endSel.innerHTML = endOpts;
+    boxEl.style.display = 'block';
+
+    window.plannerRenderDutyStationsChecklist(sIdx, eIdx);
+};
+
+window.plannerOnStationDutyChange = function() {
+    const startSel = document.getElementById('plannerDutyStartSelect');
+    const endSel = document.getElementById('plannerDutyEndSelect');
+    const sIdx = parseInt(startSel ? startSel.value : '0', 10) || 0;
+    const eIdx = parseInt(endSel ? endSel.value : '0', 10) || 0;
+    window.plannerRenderDutyStationsChecklist(sIdx, eIdx);
+};
+
+window.plannerRenderDutyStationsChecklist = function(sIdx, eIdx) {
+    const listEl = document.getElementById('plannerStationsChecklist');
+    if (!listEl || !window._plannerLoadedTrain) return;
+
+    const stacjeArray = Array.isArray(window._plannerLoadedTrain.stacje)
+        ? window._plannerLoadedTrain.stacje
+        : Object.values(window._plannerLoadedTrain.stacje || {});
+
+    let rowsHtml = '';
+    for (let i = sIdx; i <= eIdx && i < stacjeArray.length; i++) {
+        const st = stacjeArray[i];
+        const sName = (typeof st === 'object' && st.nazwa) ? st.nazwa : ('Stacja ' + (i + 1));
+        const depStr = (typeof st === 'object' && st.odjazd && st.odjazd !== '-') ? ('odj. ' + st.odjazd) : '';
+        const arrStr = (typeof st === 'object' && st.przyjazd && st.przyjazd !== '-') ? ('przyj. ' + st.przyjazd) : '';
+        const timeStr = [arrStr, depStr].filter(Boolean).join(' | ') || '-';
+
+        const curTag = (window._plannerDraftTags && (window._plannerDraftTags[sName] || window._plannerDraftTags[i])) || '';
+        const isP115 = /p115/i.test(curTag);
+
+        let badgeBtn = '';
+        if (curTag) {
+            const bStyle = isP115
+                ? 'background:rgba(239, 68, 68, 0.2); border:1px solid #ef4444; color:#fca5a5;'
+                : 'background:rgba(236, 72, 153, 0.2); border:1px solid #ec4899; color:#f472b6;';
+            badgeBtn = '\x3Cbutton type="button" data-idx="' + i + '" data-name="' + escapeHTML(sName) + '" onclick="window.openPlannerStationTagDialog(this.dataset.name, this.dataset.idx)" style="cursor:pointer; border-radius:6px; padding:3px 8px; font-size:0.72rem; font-weight:800; max-width:140px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; ' + bStyle + '" title="Edytuj znacznik / P115"\x3E' +
+                (isP115 ? '⚠️ ' : '🔖 ') + escapeHTML(curTag) +
+            '\x3C/button\x3E';
+        } else {
+            badgeBtn = '\x3Cbutton type="button" data-idx="' + i + '" data-name="' + escapeHTML(sName) + '" onclick="window.openPlannerStationTagDialog(this.dataset.name, this.dataset.idx)" class="date-quick-btn" style="min-height:30px; padding:2px 8px; font-size:0.72rem; font-weight:700;"\x3E' +
+                '+ P115 / Notatka' +
+            '\x3C/button\x3E';
+        }
+
+        const isTerminal = (i === sIdx || i === eIdx);
+        const termIcon = (i === sIdx) ? 'trip_origin' : (i === eIdx ? 'flag' : 'radio_button_unchecked');
+        const termColor = (i === sIdx) ? '#22c55e' : (i === eIdx ? '#f43f5e' : 'var(--text-muted)');
+
+        rowsHtml +=
+            '\x3Ctr style="border-bottom:1px solid rgba(255,255,255,0.06); ' + (isTerminal ? 'background:rgba(255,255,255,0.02);' : '') + '"\x3E' +
+                '\x3Ctd style="padding:7px 6px; text-align:left;"\x3E' +
+                    '\x3Cdiv style="display:flex; align-items:center; gap:5px;"\x3E' +
+                        '\x3Cspan class="material-symbols-outlined" style="font-size:0.95rem; color:' + termColor + ';"\x3E' + termIcon + '\x3C/span\x3E' +
+                        '\x3Cdiv\x3E' +
+                            '\x3Cdiv style="font-weight:' + (isTerminal ? '800' : '600') + '; font-size:0.82rem; color:var(--text);"\x3E' + escapeHTML(sName) + '\x3C/div\x3E' +
+                            '\x3Cdiv style="font-size:0.7rem; color:var(--text-muted);"\x3E' + escapeHTML(timeStr) + '\x3C/div\x3E' +
+                        '\x3C/div\x3E' +
+                    '\x3C/div\x3E' +
+                '\x3C/td\x3E' +
+                '\x3Ctd style="padding:7px 6px; text-align:right;"\x3E' + badgeBtn + '\x3C/td\x3E' +
+            '\x3C/tr\x3E';
+    }
+
+    listEl.innerHTML = rowsHtml;
+};
+
+window.openPlannerStationTagDialog = function(stName, stIdxStr) {
+    const stIdx = parseInt(stIdxStr, 10);
+    const curTag = (window._plannerDraftTags && (window._plannerDraftTags[stName] || window._plannerDraftTags[stIdx])) || '';
+    const isCurP115 = /p115/i.test(curTag) || /poza peron/i.test(curTag) || /kr[oó]tki peron/i.test(curTag);
+
+    let p115CoachesVal = '';
+    if (isCurP115) {
+        const m = curTag.match(/p115\s*:\s*([^|]+)/i) || curTag.match(/poza\s*peron[a-z]*\s*:\s*([^|]+)/i);
+        p115CoachesVal = m ? m[1].trim() : '';
+    }
+
+    const tagSubOverlay = document.createElement('div');
+    tagSubOverlay.id = 'plannerTagSubOverlay';
+    tagSubOverlay.className = 'czuwak-sheet-overlay';
+    tagSubOverlay.style.zIndex = '10050';
+    tagSubOverlay.onclick = (e) => { if (e.target === tagSubOverlay) tagSubOverlay.remove(); };
+
+    const presets = [
+        { label: '♿ Wózek / PRM', val: '♿ PRM' },
+        { label: '🚲 Rowery', val: '🚲 Rowery' },
+        { label: '👥 Grupa podróżnych', val: '👥 Grupa' },
+        { label: '⚡ Awaria drzwi', val: '⚡ Awaria drzwi' }
+    ];
+
+    let presetsHtml = '';
+    presets.forEach(p => {
+        presetsHtml += '\x3Cbutton type="button" data-val="' + escapeHTML(p.val) + '" onclick="document.getElementById(\'plannerTagCustomInput\').value = this.dataset.val;" class="hud-btn" style="min-height:44px; text-align:left; justify-content:flex-start;"\x3E' +
+            escapeHTML(p.label) +
+        '\x3C/button\x3E';
+    });
+
+    tagSubOverlay.innerHTML =
+        '\x3Cdiv class="czuwak-sheet-content" style="max-height:90vh;"\x3E' +
+            '\x3Cdiv style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"\x3E' +
+                '\x3Cdiv style="font-size:1.02rem; font-weight:900; color:var(--text); display:flex; align-items:center; gap:6px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined" style="color:var(--primary);"\x3Ebookmark\x3C/span\x3E Znacznik / P115: ' + escapeHTML(stName) +
+                '\x3C/div\x3E' +
+                '\x3Cbutton type="button" onclick="document.getElementById(\'plannerTagSubOverlay\').remove()" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; padding:4px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined"\x3Eclose\x3C/span\x3E' +
+                '\x3C/button\x3E' +
+            '\x3C/div\x3E' +
+
+            // PROCEDURA P115
+            '\x3Cdiv style="background:rgba(220, 38, 38, 0.12); border:1.5px solid #ef4444; border-radius:12px; padding:12px; margin-bottom:12px;"\x3E' +
+                '\x3Clabel style="display:flex; align-items:center; gap:8px; cursor:pointer;"\x3E' +
+                    '\x3Cinput type="checkbox" id="chkPlannerP115" ' + (isCurP115 ? 'checked' : '') + ' onchange="document.getElementById(\'plannerP115Box\').style.display=this.checked?\'block\':\'none\';" style="width:22px; height:22px; accent-color:#ef4444; cursor:pointer;"\x3E' +
+                    '\x3Cdiv\x3E' +
+                        '\x3Cdiv style="font-size:0.92rem; font-weight:900; color:#f87171; display:flex; align-items:center; gap:5px;"\x3E' +
+                            '\x3Cspan class="material-symbols-outlined" style="font-size:1.1rem;"\x3Ewarning\x3C/span\x3E PROCEDURA P115 (Skład poza peronem)' +
+                        '\x3C/div\x3E' +
+                        '\x3Cdiv style="font-size:0.75rem; color:var(--text-muted);"\x3EKrótka krawędź peronowa na stacji ' + escapeHTML(stName) + '\x3C/div\x3E' +
+                    '\x3C/div\x3E' +
+                '\x3C/label\x3E' +
+                '\x3Cdiv id="plannerP115Box" style="display:' + (isCurP115 ? 'block' : 'none') + '; margin-top:10px; padding-top:8px; border-top:1px dashed rgba(239, 68, 68, 0.4);"\x3E' +
+                    '\x3Clabel style="display:block; font-size:0.78rem; font-weight:800; color:#fca5a5; margin-bottom:4px;"\x3ENumery wagonów poza peronem:\x3C/label\x3E' +
+                    '\x3Cinput type="text" id="plannerP115CoachesInput" value="' + escapeHTML(p115CoachesVal) + '" placeholder="np. wag. 1, 2 lub 11, 12" style="width:100%; padding:9px 12px; font-weight:800; font-size:0.92rem; border-radius:8px; border:1px solid #ef4444; background:var(--input-bg); color:var(--text);"\x3E' +
+                '\x3C/div\x3E' +
+            '\x3C/div\x3E' +
+
+            '\x3Cdiv style="font-size:0.78rem; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin-bottom:6px;"\x3EInne znaczniki drużyny:\x3C/div\x3E' +
+            '\x3Cdiv style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px;"\x3E' + presetsHtml + '\x3C/div\x3E' +
+
+            '\x3Cdiv style="margin-bottom:14px;"\x3E' +
+                '\x3Clabel style="display:block; font-size:0.8rem; font-weight:800; color:var(--text); margin-bottom:4px;"\x3ETreść notatki / tagu:\x3C/label\x3E' +
+                '\x3Cinput type="text" id="plannerTagCustomInput" value="' + escapeHTML(curTag.replace(/⚠️\s*P115[^|]*(\|)?/i, '').trim()) + '" placeholder="np. ♿ PRM, pasażer na wózku..." style="width:100%; padding:9px 12px; font-weight:800; font-size:0.95rem; border-radius:8px; border:1px solid var(--input-border); background:var(--input-bg); color:var(--text);"\x3E' +
+            '\x3C/div\x3E' +
+
+            '\x3Cdiv style="display:flex; gap:8px;"\x3E' +
+                '\x3Cbutton type="button" data-name="' + escapeHTML(stName) + '" data-idx="' + stIdx + '" onclick="const pOn=document.getElementById(\'chkPlannerP115\').checked; const pTxt=document.getElementById(\'plannerP115CoachesInput\').value.trim(); const cTxt=document.getElementById(\'plannerTagCustomInput\').value.trim(); let finalTag=\'\'; if (pOn) { finalTag = \'⚠️ P115: \' + (pTxt || \'skład poza peronem\'); if (cTxt) finalTag += \' | \' + cTxt; } else { finalTag = cTxt; } window.savePlannerStationTag(this.dataset.name, this.dataset.idx, finalTag); document.getElementById(\'plannerTagSubOverlay\').remove();" class="menu-btn menu-btn-primary" style="flex:2; min-height:48px; font-weight:900; justify-content:center; gap:6px;"\x3E' +
+                    '\x3Cspan class="material-symbols-outlined"\x3Echeck\x3C/span\x3E Zapisz znacznik' +
+                '\x3C/button\x3E' +
+                '\x3Cbutton type="button" data-name="' + escapeHTML(stName) + '" data-idx="' + stIdx + '" onclick="window.savePlannerStationTag(this.dataset.name, this.dataset.idx, null); document.getElementById(\'plannerTagSubOverlay\').remove();" class="menu-btn menu-btn-secondary" style="flex:1; min-height:48px; color:#f87171; justify-content:center;"\x3E' +
+                    'Usuń' +
+                '\x3C/button\x3E' +
+            '\x3C/div\x3E' +
+        '\x3C/div\x3E';
+
+    document.body.appendChild(tagSubOverlay);
+};
+
+window.savePlannerStationTag = function(stName, stIdx, tagVal) {
+    if (!window._plannerDraftTags) window._plannerDraftTags = {};
+    if (tagVal) {
+        window._plannerDraftTags[stName] = tagVal;
+    } else {
+        delete window._plannerDraftTags[stName];
+        delete window._plannerDraftTags[stIdx];
+    }
+    const startSel = document.getElementById('plannerDutyStartSelect');
+    const endSel = document.getElementById('plannerDutyEndSelect');
+    const sIdx = parseInt(startSel ? startSel.value : '0', 10) || 0;
+    const eIdx = parseInt(endSel ? endSel.value : '0', 10) || 0;
+    window.plannerRenderDutyStationsChecklist(sIdx, eIdx);
+};
+
+window.saveCurrentTrainToPlan = async function(targetDateStr, editItemId = null) {
+    if (!window._plannerLoadedTrain) {
+        alert('Wybierz i załaduj najpierw pociąg.');
+        return;
+    }
+
+    const startSel = document.getElementById('plannerDutyStartSelect');
+    const endSel = document.getElementById('plannerDutyEndSelect');
+    const sIdx = parseInt(startSel ? startSel.value : '0', 10) || 0;
+    const eIdx = parseInt(endSel ? endSel.value : '0', 10) || 0;
+
+    if (sIdx >= eIdx) {
+        alert('Stacja zdania DK musi być za stacją objęcia.');
+        return;
+    }
+
+    const train = window._plannerLoadedTrain;
+    const stacjeArray = Array.isArray(train.stacje) ? train.stacje : Object.values(train.stacje || {});
+    const startSt = stacjeArray[sIdx] || {};
+    const endSt = stacjeArray[eIdx] || {};
+
+    const startName = (typeof startSt === 'object' && startSt.nazwa) ? startSt.nazwa : ('Stacja ' + (sIdx + 1));
+    const endName = (typeof endSt === 'object' && endSt.nazwa) ? endSt.nazwa : ('Stacja ' + (eIdx + 1));
+    const depTime = (typeof startSt === 'object' && startSt.odjazd) ? startSt.odjazd : '-';
+    const arrTime = (typeof endSt === 'object' && endSt.przyjazd) ? endSt.przyjazd : '-';
+
+    const item = {
+        id: editItemId ? String(editItemId) : String(Date.now()),
+        trainNumber: String(train.numer || '').trim(),
+        trainName: String(train.nazwa || '').trim(),
+        relation: (stacjeArray[0] ? (stacjeArray[0].nazwa || stacjeArray[0]) : '') + ' \u2794 ' + (stacjeArray[stacjeArray.length - 1] ? (stacjeArray[stacjeArray.length - 1].nazwa || stacjeArray[stacjeArray.length - 1]) : ''),
+        startStationIdx: sIdx,
+        startStationName: startName,
+        endStationIdx: eIdx,
+        endStationName: endName,
+        depTime: depTime,
+        arrTime: arrTime,
+        tags: Object.assign({}, window._plannerDraftTags),
+        status: 'pending',
+        completedAt: null
+    };
+
+    await saveDutyPlanItem(targetDateStr, item);
+
+    if (typeof window.showActionToast === 'function') {
+        window.showActionToast('✓ Zapisano pociąg #' + item.trainNumber + ' w planie służby');
+    }
+
+    window.openDutyPlannerModal(targetDateStr);
+};
+
+// ==========================================
 // MOTYW APLIKACJI (CIEMNY / JASNY / SYSTEMOWY)
 // ==========================================
 const themeToggle = document.getElementById('theme-toggle');
@@ -1768,6 +2592,16 @@ window.completeCrewDutyAndStopCzuwak = (stationName, reasonText = '') => {
     window.stopTrainTracking();
     if (typeof window.archiveCurrentTrainToHistory === 'function') {
         window.archiveCurrentTrainToHistory(reasonText || 'Zakończenie obsługi DK');
+    }
+    if (typeof window.markDutyPlanItemCompleted === 'function') {
+        if (window._activeDutyPlanDate && window._activeDutyPlanItemId) {
+            window.markDutyPlanItemCompleted(window._activeDutyPlanDate, window._activeDutyPlanItemId, stationName || 'Zakończenie DK');
+        } else if (window._currentActiveTrainNumber) {
+            window.markDutyPlanItemCompletedByTrain(window.selectedTrainDepartureDate, window._currentActiveTrainNumber, stationName || 'Zakończenie DK');
+        }
+    }
+    if (typeof window.syncDutyPlanHomeCardUI === 'function') {
+        window.syncDutyPlanHomeCardUI();
     }
     if (typeof window.czuwakLog === 'function') {
         window.czuwakLog('INFO', 'STATION', 'Zakończono odcinek drużyny na stacji ' + (stationName || window._crewDutyEndStationName || 'stacja końcowa') + (reasonText ? (' (' + reasonText + ')') : ''));
@@ -3452,6 +4286,13 @@ window.closeActiveTrainAndSleep = () => {
     if (typeof window.archiveCurrentTrainToHistory === 'function') {
         window.archiveCurrentTrainToHistory('Zakończenie i uśpienie');
     }
+    if (typeof window.markDutyPlanItemCompleted === 'function') {
+        if (window._activeDutyPlanDate && window._activeDutyPlanItemId) {
+            window.markDutyPlanItemCompleted(window._activeDutyPlanDate, window._activeDutyPlanItemId, 'Zakończono ręcznie');
+        } else if (window._currentActiveTrainNumber) {
+            window.markDutyPlanItemCompletedByTrain(window.selectedTrainDepartureDate, window._currentActiveTrainNumber, 'Zakończono ręcznie');
+        }
+    }
 
     window.stopTrainTracking();
     window.stopAlarmLoop();
@@ -3510,6 +4351,9 @@ window.closeActiveTrainAndSleep = () => {
     window.expandTrainConfigPanel();
     window.updateSpeedAndGpsIndicator(0, 'idle', 'U\u015bpiony');
     window.renderSleepState();
+    if (typeof window.syncDutyPlanHomeCardUI === 'function') {
+        window.syncDutyPlanHomeCardUI();
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
@@ -3540,6 +4384,10 @@ window.renderSleepState = () => {
             '\x3C/div\x3E';
         listContainer.style.display = 'block';
     }
+
+    if (typeof window.syncDutyPlanHomeCardUI === 'function') {
+        window.syncDutyPlanHomeCardUI();
+    }
 };
 
 window.restoreLastState = () => {
@@ -3565,6 +4413,10 @@ window.restoreLastState = () => {
         window.findTrainForConfiguration(true);
     } else {
         window.renderSleepState();
+    }
+
+    if (typeof window.syncDutyPlanHomeCardUI === 'function') {
+        window.syncDutyPlanHomeCardUI();
     }
 };
 
@@ -3793,6 +4645,8 @@ window.collapseTrainConfigPanel = () => {
     window._configPanelForceExpanded = false;
     const body = document.getElementById('trainConfigCollapsibleBody');
     const bar = document.getElementById('collapsedTrainConfigBar');
+    const planCard = document.getElementById('activeDutyPlanHomeCard');
+    if (planCard) planCard.style.display = 'none';
     if (body && bar && window._currentTrainObject) {
         body.style.display = 'none';
         bar.style.display = 'flex';
@@ -3805,6 +4659,9 @@ window.expandTrainConfigPanel = () => {
     const bar = document.getElementById('collapsedTrainConfigBar');
     if (body) body.style.display = 'block';
     if (bar) bar.style.display = 'none';
+    if (typeof window.syncDutyPlanHomeCardUI === 'function') {
+        window.syncDutyPlanHomeCardUI();
+    }
 };
 
 window.toggleTrainConfigPanel = (forceOpen) => {
@@ -6992,6 +7849,9 @@ function handleAppForegroundResume(source) {
     }
     // Przeładuj log rzeczywistych czasów z pamięci trwałej (ochrona przed utratą po wyjściu z aplikacji)
     loadStationActualLog();
+    if (typeof window.syncDutyPlanHomeCardUI === 'function') {
+        window.syncDutyPlanHomeCardUI();
+    }
     if (window._currentTrainObject && window._currentTrainObject.stacje) {
         const stationsArr = Array.isArray(window._currentTrainObject.stacje)
             ? window._currentTrainObject.stacje

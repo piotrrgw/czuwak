@@ -51,6 +51,10 @@
 10. **System Dźwięków Powiadomień Czuwaka i Wybór z Biblioteki Androida:**
    - 3 wbudowane profesjonalne sygnały audio (Gong PKP, Radar Czuwaka, Trąbka pociągu) oraz dźwięk własny z telefonu (mp3/wav do 12 MB w `IndexedDB`).
    - Suwak dystansu alarmu (1–15 km) oraz wybór trybu powiadomienia (Jednokrotne vs Tryb Budzika).
+11. **Planer Służby / Moja Służba (Planowanie z domu i 1-Tap Launcher na peronie):**
+   - **Wygodne przygotowanie pociągów z wyprzedzeniem:** Drużyna konduktorska może w domu przed służbą zaplanować cały dzień (lub kolejny dzień służby), wprowadzając kolejne obsługiwane pociągi, stacje objęcia i zdania DK, procedurę P115 z numerami wagonów oraz znaczniki (`♿ PRM`, `🚲 Rowery`, `👥 Grupa`, itp.).
+   - **Karta szybkiego startu 1-Tap na ekranie głównym:** Po wejściu do pociągu aplikacja wyświetla zaplanowaną służbę z dużym, natychmiastowym przyciskiem `[🚀 Uruchom pociąg (1-Tap)]` – uruchomienie Czuwaka, wczytanie trasy, odcinka DK i tagów P115 następuje w 1 sekundę bez wpisywania i szukania.
+   - **Spokojne przejście między pociągami (Bez wymuszonego auto-startu):** Po zakończeniu obsługi pociągu #1 Czuwak samoczynnie wyłącza GPS i przechodzi w stan uśpienia, chroniąc baterię w trakcie przerwy (np. 1h na stacji węzłowej). Na ekranie głównym wyświetla się pociąg #2 gotowy do manualnego uruchomienia 1 tapem po wejściu na pokład kolejnego składu.
 
 ---
 

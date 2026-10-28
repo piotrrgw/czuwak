@@ -541,6 +541,9 @@
                     <button id="btnCheckApkUpdate" class="menu-btn menu-btn-secondary" onclick="window.checkAppUpdate(true)">
                         <span class="material-symbols-outlined" style="color:var(--open);">system_update</span> Sprawdź aktualizację aplikacji (.apk)
                     </button>
+                    <button id="btnOpenDutyPlanner" class="menu-btn menu-btn-primary" onclick="window.openDutyPlannerModal()" style="font-weight: 800; justify-content: center; min-height: 48px; background: linear-gradient(135deg, #0284c7, #2563eb); border-color: rgba(56,189,248,0.5);">
+                        <span class="material-symbols-outlined" style="color:#ffffff;">calendar_month</span> Planer służby (Moje pociągi)
+                    </button>
                     <button id="btnOpenDutyHistory" class="menu-btn menu-btn-primary" onclick="window.openDutyHistoryModal()" style="font-weight: 800; justify-content: center; min-height: 46px;">
                         <span class="material-symbols-outlined" style="color:#ffffff;">manage_history</span> Historia obsługi (Zrealizowane pociągi)
                     </button>
@@ -652,6 +655,9 @@
         </div>
 
         <div class="controls glass-panel" id="trainConfigControlsPanel">
+            <!-- KARTA PLANU SŁUŻBY (MOJA SŁUŻBA - DZISIEJSZE POCIĄGI / 1-TAP START) -->
+            <div id="activeDutyPlanHomeCard" style="display: none; margin-bottom: 12px;"></div>
+
             <!-- ZWINIĘTY PASEK KONFIGURACJI (PO SKONFIGUROWANIU POCIĄGU) -->
             <div id="collapsedTrainConfigBar" class="collapsed-config-bar" style="display: none;" onclick="window.toggleTrainConfigPanel(true)">
                 <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
