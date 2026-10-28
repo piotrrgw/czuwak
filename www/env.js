@@ -1,6 +1,6 @@
 // --- GŁÓWNY PLIK KONFIGURACYJNY APLIKACJI CZUWAK ---
-const APP_VERSION = "v1.2.2";
-const APP_BUILD = "14";
+const APP_VERSION = "v1.2.3";
+const APP_BUILD = "15";
 const APP_APK_NAME = "czuwak(" + APP_VERSION + ")(" + APP_BUILD + ").apk";
 
 if (typeof window !== 'undefined') {

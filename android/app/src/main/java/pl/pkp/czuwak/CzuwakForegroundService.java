@@ -8,7 +8,11 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.IBinder;
 import android.os.PowerManager;
 
@@ -25,6 +29,8 @@ public class CzuwakForegroundService extends Service {
     public static final String EXTRA_TEXT = "extra_text";
 
     private PowerManager.WakeLock wakeLock;
+    private LocationManager locationManager;
+    private LocationListener locationListener;
     private static boolean isRunning = false;
     private static String lastTitle = "";
     private static String lastText = "";
@@ -72,6 +78,7 @@ public class CzuwakForegroundService extends Service {
         super.onCreate();
         createNotificationChannel();
         acquireCpuWakeLock();
+        startNativeLocationUpdates();
     }
 
     @Override
@@ -187,8 +194,57 @@ public class CzuwakForegroundService extends Service {
         }
     }
 
+    private void startNativeLocationUpdates() {
+        try {
+            if (locationManager == null) {
+                locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+            }
+            if (locationManager == null) return;
+
+            if (locationListener == null) {
+                locationListener = new LocationListener() {
+                    @Override
+                    public void onLocationChanged(Location location) {
+                        if (location != null) {
+                            MainActivity.sendLocationToWebView(location);
+                        }
+                    }
+
+                    @Override
+                    public void onStatusChanged(String provider, int status, Bundle extras) {}
+
+                    @Override
+                    public void onProviderEnabled(String provider) {}
+
+                    @Override
+                    public void onProviderDisabled(String provider) {}
+                };
+            }
+
+            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, locationListener);
+            }
+            if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 2000L, 0f, locationListener);
+            }
+        } catch (SecurityException se) {
+            se.printStackTrace();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void stopNativeLocationUpdates() {
+        try {
+            if (locationManager != null && locationListener != null) {
+                locationManager.removeUpdates(locationListener);
+            }
+        } catch (Exception ignored) {}
+    }
+
     private void stopForegroundCompat() {
         isRunning = false;
+        stopNativeLocationUpdates();
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 stopForeground(STOP_FOREGROUND_REMOVE);
@@ -201,6 +257,7 @@ public class CzuwakForegroundService extends Service {
     @Override
     public void onDestroy() {
         isRunning = false;
+        stopNativeLocationUpdates();
         releaseCpuWakeLock();
         super.onDestroy();
     }

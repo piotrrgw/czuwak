@@ -43,6 +43,13 @@ public class CzuwakWidgetBridge {
     }
 
     @JavascriptInterface
+    public void strobeTorch(final int count, final int delayMs) {
+        if (activity != null) {
+            activity.strobeTorch(count, delayMs);
+        }
+    }
+
+    @JavascriptInterface
     public void updateWidget(String trainInfo, String nextStation, String distStr, String timeStr, String delayStr, String speedStr, String statusStr) {
         if (context == null) return;
         try {

@@ -284,11 +284,13 @@
             flex-wrap: wrap;
         }
         .station-stop-check-btn {
-            width: 24px;
-            height: 24px;
+            width: 32px;
+            height: 32px;
+            min-width: 44px;
+            min-height: 44px;
             border-radius: 50%;
-            border: 1.5px solid var(--glass-border);
-            background: rgba(255, 255, 255, 0.04);
+            border: 2px solid var(--glass-border);
+            background: rgba(255, 255, 255, 0.06);
             color: var(--text-muted);
             display: inline-flex;
             align-items: center;
@@ -297,17 +299,44 @@
             flex-shrink: 0;
             padding: 0;
             transition: all 0.2s ease;
+            touch-action: manipulation;
         }
         .station-stop-check-btn svg {
-            width: 14px;
-            height: 14px;
+            width: 18px;
+            height: 18px;
             fill: currentColor;
         }
         .station-stop-check-btn.checked {
-            background: rgba(34, 197, 94, 0.22);
+            background: rgba(34, 197, 94, 0.28);
             border-color: #22c55e;
             color: #4ade80;
-            box-shadow: 0 0 8px rgba(34, 197, 94, 0.35);
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.45);
+        }
+        @keyframes p115-flash {
+            0%, 100% {
+                background: #dc2626 !important;
+                border-color: #fca5a5 !important;
+                box-shadow: 0 0 45px rgba(220, 38, 38, 0.95), 0 0 15px rgba(255, 255, 255, 0.8) !important;
+            }
+            50% {
+                background: #450a0a !important;
+                border-color: #b91c1c !important;
+                box-shadow: 0 0 15px rgba(220, 38, 38, 0.4) !important;
+            }
+        }
+        .p115-strobe-alert {
+            animation: p115-flash 0.55s infinite ease-in-out !important;
+        }
+        @keyframes p115-screen-pulse {
+            0%, 100% {
+                box-shadow: inset 0 0 50px rgba(239, 68, 68, 0.85), inset 0 0 100px rgba(220, 38, 38, 0.55);
+            }
+            50% {
+                box-shadow: inset 0 0 10px rgba(239, 68, 68, 0.2);
+            }
+        }
+        body.p115-screen-active {
+            animation: p115-screen-pulse 0.6s infinite ease-in-out !important;
         }
         .station-stop-tag {
             display: inline-flex;
@@ -511,6 +540,9 @@
                     </button>
                     <button id="btnCheckApkUpdate" class="menu-btn menu-btn-secondary" onclick="window.checkAppUpdate(true)">
                         <span class="material-symbols-outlined" style="color:var(--open);">system_update</span> Sprawdź aktualizację aplikacji (.apk)
+                    </button>
+                    <button id="btnOpenDutyHistory" class="menu-btn menu-btn-primary" onclick="window.openDutyHistoryModal()" style="font-weight: 800; justify-content: center; min-height: 46px;">
+                        <span class="material-symbols-outlined" style="color:#ffffff;">manage_history</span> Historia obsługi (Zrealizowane pociągi)
                     </button>
                     <button id="btnOpenDiagnosticLogs" class="menu-btn menu-btn-secondary" onclick="window.openDiagnosticLogsModal()">
                         <span class="material-symbols-outlined" style="color:var(--primary);">terminal</span> Dziennik diagnostyczny (Logi GPS)

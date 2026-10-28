@@ -22,46 +22,35 @@
      - **Kolorowe znaczniki drużyny konduktorskiej (Crew Tags):** Prezentacja tagów przypisanych do stacji (`♿ PRM`, `🚲 Rowery`, `⚠️ Krótki peron`, itp.) bezpośrednio na widgecie.
      - **Wyróżnienie stacji zmiany DK:** Wyrazisty złoto-bursztynowy baner ostrzegawczy `⚠️ STACJA ZMIANY DK (ZDANIE SKŁADU)` przy zbliżaniu się do końca służby.
      - **Dynamiczny status pociągu:** Pigułka stanu pociągu (`🟢 POSTÓJ NA STACJI`, `🔵 NA SZLAKU`, `🟠 ZBLIŻANIE DO STACJI`).
-   - **Hero HUD „Następna stacja”:** Wyróżniona karta nad tabelą trasy z nazwą stacji, odległością w czasie rzeczywistym, wyliczonym ETA, statusem oraz przyciskami szybkiego odhaczenia i opóźnienia.
-   - **Pływający Mini-HUD (Top Sticky Dynamic Island):** Dyskretny pasek pojawiający się u góry ekranu (`top: 12px`) podczas przewijania rozkładu jazdy w dół, zapewniający ciągły podgląd następnej stacji bez kolizji z przyciskami FAB i prędkościomierzem.
+   - **Hero HUD „Następna stacja”:** Wyróżniona karta nad tabelą trasy z nazwą stacji, odległością w czasie rzeczywistym, wyliczonym ETA, statusem oraz bezpośrednim przyciskiem odhaczania postoju / odjazdu (`[Odhacz postój teraz]` ➔ `[Odhacz odjazd (HH:MM)]` ➔ `[✓ Zaliczono]`).
+   - **Pływający Mini-HUD ze zintegrowanym przyciskiem postoju:** Dyskretny pasek pojawiający się podczas przewijania rozkładu jazdy w dół, wyposażony w przycisk `[✓ Postój]` oraz `[Wyśrodkuj]`.
    - **Widget na ekranie blokady (MediaSession):** Prezentacja numeru pociągu, relacji, najbliższej stacji, odległości i prognozowanego opóźnienia bezpośrednio na zablokowanym ekranie telefonu.
-4. **Zarządzanie opóźnieniami i rejestracja postojów:**
+4. **Procedura P115 (Skład pociągu nie mieści się w peronie):**
+   - **Wprowadzanie wagonów poza peronem:** Możliwość wpisania numerów wagonów, które zatrzymają się poza krawędzią peronową (np. `wag. 11, 12`).
+   - **Stroboskopowy alarm wizualny:** Podczas zbliżania się do stacji z procedurą P115 ekran telefonu mruga pulsacyjnie na czerwono z wyrazistym banerem `⚠️ PROCEDURA P115: SKŁAD POCIĄGU NIE MIEŚCI SIĘ W PERONIE!` oraz wyróżnionymi numerami wagonów.
+   - **Stroboskop latarki aparatu:** Natywny stroboskop latarki LED telefonu (`strobeTorch`) ostrzegający drużynę konduktorską nawet przy odwróconym telefonie.
+5. **Historia Obsługi (Zrealizowane pociągi):**
+   - **Archiwum pociągów:** Dedykowana zakładka w menu bocznym przechowująca zrealizowane pociągi wraz z rozkładowymi i rzeczywistymi czasami zatrzymań i odjazdów, opóźnieniami, odhaczonymi postojami i notatkami drużyny.
+   - **Raport służby:** Możliwość generowania czytelnego raportu tekstowego, skopiowania do schowka telefonu lub pobrania pliku `.txt`.
+6. **Zarządzanie opóźnieniami i intuicyjna rejestracja postojów:**
+   - **Intuicyjne, jednodotykowe odhaczanie postoju i odjazdu:** Zwiększone pole dotykowe (min. 44x44px), haptyka wibracyjna i toasty potwierdzające odhaczenie postoju i odjazdu.
    - **One-Tap Delay Bottom Sheet:** Ergonomiczny panel dolny z bezpośrednim polem liczbowym, stepperami `[-5m, -1m, +1m, +5m]` oraz szybkimi kafelkami `[Plan]`, `[+3]`, `[+5]`, `[+10]`, `[+15]`, `[+20]`, `[+30]`, `[+45]`, `[+60]`.
-   - **Interaktywne komórki tabeli trasy:** Każda komórka godziny przyjazdu i odjazdu w tabeli jest bezpośrednio klikalna z poziomu widoku trasy, umożliwiając szybkie wprowadzenie rzeczywistego czasu lub korektę opóźnienia składu.
-   - **Edycja czasów rzeczywistych i 1-tap presety:** Modal edycji z przyciskami szybkiego uzupełnienia `[✓ Wg planu]`, `[⏱️ Postój TERAZ]`, `[🟢 Odjazd TERAZ]`, `[+2m]`, `[+5m]`, `[+10m]` oraz automatycznym przeliczaniem opóźnienia pociągu.
+   - **Interaktywne komórki tabeli trasy:** Każda komórka godziny przyjazdu i odjazdu w tabeli jest bezpośrednio klikalna z poziomu widoku trasy.
    - **Trwałość postojów i notatek stacji:** Zapis z podwójnym indeksem sesyjnym i datowym chroni przed utratą odhaczonych postojów oraz tagów (`PRM`, `Rower`, `Peron`) przy minimalizacji aplikacji lub przejściu przez północ.
-5. **Blokada przeskoczenia stacji i Bezpieczeństwo Szlaku:**
+7. **Blokada przeskoczenia stacji i eliminacja cofania szlaku:**
    - **Wstrzymanie automatycznego przejścia do kolejnej stacji:** Jeśli drużyna nie odhaczyła zatrzymania na planowej stacji postoju z odcinka DK, Czuwak blokuje przeskok Hero HUD oraz wskaźnika trasy.
-   - **Baner ostrzegawczy z natychmiastowym odblokowaniem:** Wyróżniony baner w Hero HUD `BLOKADA PRZESKOKU: Nie odhaczono postoju na stacji...` z jednym przyciskiem `[✓ Odhacz i potwierdź postój]`, który natychmiastowo zdejmuje blokadę.
-6. **Płynne Śledzenie GPS, Ochrona Postoju i Praca przy Wygaszonym Ekranie:**
-   - **Natywny Serwis Pierwszoplanowy (`CzuwakForegroundService`):** Gwarantuje ciągłe śledzenie GPS i utrzymanie procesora (`PARTIAL_WAKE_LOCK`) na systemach Android 10–15 nawet po wygaszeniu ekranu i schowaniu telefonu do kieszeni.
-   - **Indeks stacji `O(1)` i różnicowa aktualizacja DOM:** Współrzędne stacji indeksowane są w strukturze `Map` w pamięci RAM, a wiersze trasy aktualizują DOM wyłącznie przy faktycznej zmianie dystansu ($\ge 0.1\text{ km}$), eliminując zbędne przeliczenia układu strony (*Layout Reflow*).
+   - **Eliminacja cofania szlaku (`minAllowedSegIdx`):** Po odjeździe ze stacji B pociąg nie cofa się do odcinka A>B – przebyte stacje są trwale wykluczone z doboru odcinka szlaku.
+8. **Niezawodna praca przy wygaszonym ekranie i płynne śledzenie GPS:**
+   - **Natywny Serwis Pierwszoplanowy (`CzuwakForegroundService`) ze sprzętowym `LocationListener`:** Gwarantuje ciągłe śledzenie GPS w tle i dostarczanie współrzędnych bezpośrednio do silnika aplikacji, zapobiegając usypianiu powiadomień po zablokowaniu ekranu.
    - **Ciągły prędkościomierz jak w nawigacji:** Zastosowanie filtru wykładniczego (EMA) i bufora próbek GPS eliminuje skoki prędkości (0 ➔ 70 ➔ 0 km/h) oraz gwałtowne wahania.
    - **Ochrona przed fałszywym odjazdem na postoju:** Wyeliminowano przedwczesne oznaczanie odjazdu podczas chodzenia konduktora po składzie lub wahań satelitów (próg odjazdu podniesiony do 12 km/h z wymogiem potwierdzenia w 2 kolejnych pomiarach).
-   - **Inteligentny watchdog sygnału i debouncing wznowienia:** Wyeliminowano agresywne odpytywanie wież BTS w tle oraz podwójny restart GPS przy przywracaniu aplikacji z tła.
-7. **Dziennik Diagnostyczny Aplikacji i Ciągły Autozapis Służby (Continuous Stream & SAF):**
-   - **Ciągły autozapis w tle (co 5 sekund):** Nowy silnik zapisu strumieniowego na żywo flushuje logi diagnostyczne bezpośrednio na dysk telefonu co 5 sekund oraz natychmiastowo przy zdarzeniach krytycznych (postój, odjazd, alarm stacyjny, błąd GPS, zakończenie służby DK).
-   - **Wskazanie folderu zapisu na telefonie:** Dzięki integracji z Android Storage Access Framework (SAF), użytkownik może wybrać z menu bocznego dowolny folder w pamięci telefonu (np. `Pobrane`, `Dokumenty` lub dedykowany folder służbowy). Przy braku wyboru folderu działa automatyczny potrójny fallback (publiczny `Pobrane/Czuwak_Logi/` ➔ pamięć aplikacji).
-   - **Podwójna organizacja logów dla długiej służby (12h):**
-     - Osobny plik dla każdego obsługiwanego pociągu: `czuwak_log_YYYY-MM-DD_poc_XXXXX.txt`
-     - Zbiorczy plik całej służby dobowej: `czuwak_sluzba_YYYY-MM-DD.txt` (zachowuje ciągłość telemetryczną przy obsłudze wielu pociągów pod rząd).
-   - **Pojemny bufor w pamięci (5 000 wpisów):** Możliwość przeglądania, filtrowania kolorystycznego (GPS/Prędkość, Stacje/Postoje, Błędy), kopiowania do schowka i ręcznego pobrania `.txt`.
-8. **System Dźwięków Powiadomień Czuwaka i Wybór z Biblioteki Androida:**
-   - **3 wbudowane profesjonalne sygnały audio (Web Audio API):**
-     1. 🔔 **Gong peronowy PKP** – klasyczny dwukrotny gong stacyjny (Bim-Bam).
-     2. 📡 **Radar Czuwaka** – nowoczesny, dynamiczny impuls sonaru pokładowego z echem.
-     3. 🚂 **Trąbka pociągu** – wyrazisty akord syreny / sygnału baczność lokomotywy PKP.
-   - **Dźwięk własny z telefonu (w `IndexedDB`):** Możliwość załadowania dowolnego pliku dźwiękowego z pamięci urządzenia (mp3, wav, ogg do 12 MB) przechowywanego asynchronicznie w `IndexedDB` (bez obciążania limitu 5 MB `localStorage`).
-   - **Integracja z pętlą budzika i powiadomieniami:** Wybrany dźwięk jest automatycznie wykorzystywany w powiadomieniach jednokrotnych oraz w zapętlonym trybie budzika aż do potwierdzenia.
-9. **Ergonomia pracy drużyny konduktorskiej:**
-   - **Filtr trasy:** Przełącznik `[Mój odcinek DK]` vs `[Cała trasa]` umożliwiający natychmiastowe ukrycie stacji spoza bieżącej służby.
-   - **Znaczniki stacji (Crew Tags):** Szybkie notatki drużyny przy stacjach (`♿ PRM`, `🚲 Rowery`, `⚠️ Krótki peron`, `👥 Grupa`, `⚡ Awaria drzwi`) widoczne na liście, w Hero HUD, widgecie oraz w powiadomieniach.
-   - **Tryb nocny OLED True Black:** Trzybiegunowy przełącznik motywu (**Ciemny ➔ OLED ➔ Jasny**), optymalizujący zużycie baterii na wyświetlaczach AMOLED/OLED.
-   - **Zróżnicowana haptyka wibracji:** Odrębny wzorzec wibracji dla stacji pośredniej oraz wydłużony, alarmujący dla stacji zmiany DK (zdania składu).
-10. **Czuwak GPS, Odporność na utratę sygnału i Konfigurowalny Alarm:**
-   - Wyznaczanie bieżącego odcinka szlaku (`Stacja A ➔ Stacja B`) ze wzmocnioną ochroną przed przerzucaniem pociągu za stację na łukach (*Kalisz Fix v2*).
-   - **Odporność na utratę GPS / Internetu:** Po utracie sygnału GPS (np. w tunelu lub wagonie ekranowanym) włącza się nawigacja inercyjna (**Dead Reckoning**) na podstawie rozkładowej prędkości szlakowej.
-   - **Suwak dystansu alarmu (1–15 km)** oraz wybór trybu powiadomienia (**Jednokrotne** vs **Tryb Budzika**).
+9. **Dziennik Diagnostyczny Aplikacji i Ciągły Autozapis Służby (Continuous Stream & SAF):**
+   - **Ciągły autozapis w tle (co 5 sekund):** Nowy silnik zapisu strumieniowego na żywo flushuje logi diagnostyczne bezpośrednio na dysk telefonu co 5 sekund oraz natychmiastowo przy zdarzeniach krytycznych.
+   - **Wskazanie folderu zapisu na telefonie:** Dzięki integracji z Android Storage Access Framework (SAF), użytkownik może wybrać z menu bocznego dowolny folder w pamięci telefonu.
+   - **Podwójna organizacja logów dla długiej służby (12h):** Osobny plik pociągu (`czuwak_log_YYYY-MM-DD_poc_XXXXX.txt`) oraz plik całej służby (`czuwak_sluzba_YYYY-MM-DD.txt`).
+10. **System Dźwięków Powiadomień Czuwaka i Wybór z Biblioteki Androida:**
+   - 3 wbudowane profesjonalne sygnały audio (Gong PKP, Radar Czuwaka, Trąbka pociągu) oraz dźwięk własny z telefonu (mp3/wav do 12 MB w `IndexedDB`).
+   - Suwak dystansu alarmu (1–15 km) oraz wybór trybu powiadomienia (Jednokrotne vs Tryb Budzika).
 
 ---
 
@@ -70,13 +59,12 @@
 Aplikacja posiada wbudowany system samodzielnych aktualizacji over-the-air:
 1. **Stały klucz podpisu (`android/app/czuwak-release.keystore`):** Każda kompilacja `.apk` jest podpisywana tym samym certyfikatem, dzięki czemu Android pozwala zainstalować nową wersję bezpośrednio na obecną („Aktualizuj”) **bez odinstalowywania i bez utraty pobranych rozkładów czy ustawień**.
 2. **Automatyczne wydania GitHub Releases ([`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml)):**
-   - Po zmianie `APP_VERSION` / `APP_BUILD` w [`www/env.js`](www/env.js) i wypchnięciu kodu na gałąź `main`, GitHub Actions automatycznie buduje podpisany plik `.apk` i publikuje go w dwóch formatach:
-     - **Wersjonowany:** `czuwak(v1.2.2)(14).apk` (format: `czuwak(vX.X.X)(XX).apk`), dzięki czemu pobrane instalatory w folderze *Pobrane* na telefonie posiadają jednoznaczną identyfikację wersji i kompilacji.
-     - **Alias stały:** `czuwak.apk` (dla zachowania wstecznej kompatybilności ze stałymi odnośnikami).
-     - Bezpośredni link: `https://github.com/piotrrgw/czuwak/releases/latest/download/czuwak(v1.2.2)(14).apk` lub `https://github.com/piotrrgw/czuwak/releases/latest/download/czuwak.apk`.
+   - Po zmianie `APP_VERSION` / `APP_BUILD` w [`www/env.js`](www/env.js) i wypchnięciu kodu na gałąź `main`, GitHub Actions automatycznie buduje podpisany plik `.apk` i publikuje go w formatach:
+     - **Wersjonowany:** `czuwak.v1.2.3.15.apk` oraz `czuwak(v1.2.3)(15).apk`.
+     - **Alias stały:** `czuwak.apk`.
+   - Naprawiono błąd 404: aplikacja dynamicznie odpytuje GitHub API (`/releases/latest`) i pobiera właściwy dostępny asset wydania.
 3. **Wykrywanie aktualizacji w aplikacji:**
-   - Przy starcie (oraz po kliknięciu **„Sprawdź aktualizację aplikacji (.apk)”** w menu bocznym) Czuwak porównuje swoją wersję z plikiem `www/env.js` na GitHubie oraz opcjonalnymi polami w Firestore (`system/db_status`: `latestCzuwakVersion`, `minCzuwakVersion`, `czuwakApkUrl`).
-   - Gdy pojawi się nowsza wersja, wyświetla niebieski baner **„Dostępna nowa wersja Czuwaka! Kliknij, aby pobrać i zainstalować (.apk)”**, który pobiera plik z precyzyjną nazwą (np. `czuwak(v1.2.2)(14).apk`) i uruchamia instalator aktualizacji.
+   - Przy starcie (oraz po kliknięciu **„Sprawdź aktualizację aplikacji (.apk)”** w menu bocznym) Czuwak porównuje swoją wersję z GitHubem. Gdy pojawi się nowsza wersja, wyświetla powiadomienie z możliwością natychmiastowego pobrania i instalacji.
 
 ---
 
