@@ -2142,15 +2142,13 @@ window.updateStats = async () => {
 // ==========================================
 // MECHANIZM SAMODZIELNEJ AKTUALIZACJI APK (BEZ SKLEPU PLAY)
 // ==========================================
-function getApkFileName(ver, build) {
-    const v = ver || window.APP_VERSION || 'v1.0.0';
-    const b = build || window.APP_BUILD || '1';
-    return 'czuwak(' + v + ')(' + b + ').apk';
+function getApkFileName() {
+    return 'czuwak.apk';
 }
 
-const DEFAULT_APK_DOWNLOAD_URL = 'https://github.com/piotrrgw/czuwak/releases/latest/download/' + encodeURIComponent(window.APP_APK_NAME || getApkFileName());
+const DEFAULT_APK_DOWNLOAD_URL = 'https://github.com/piotrrgw/czuwak/releases/latest/download/czuwak.apk';
 const REMOTE_ENV_JS_URL = 'https://raw.githubusercontent.com/piotrrgw/czuwak/main/www/env.js';
-window._latestApkFileName = window.APP_APK_NAME || getApkFileName();
+window._latestApkFileName = 'czuwak.apk';
 window._latestApkDownloadUrl = DEFAULT_APK_DOWNLOAD_URL;
 window._latestDetectedVersionLabel = null;
 
@@ -2325,10 +2323,7 @@ window.checkAppUpdate = async function(isManual = false, dbStatusData = null) {
                     if (remBuildInt > curBuildInt || remoteScore > currentScore) {
                         foundNewer = true;
                         detectedLabel = remoteVer + (remoteBuild ? (' (kompilacja ' + remoteBuild + ')') : '');
-                        const remoteApkName = (apkNameMatch && apkNameMatch[1])
-                            ? apkNameMatch[1]
-                            : getApkFileName(remoteVer, remoteBuild);
-                        window._latestApkFileName = remoteApkName;
+                        window._latestApkFileName = 'czuwak.apk';
                         window._latestApkDownloadUrl = 'https://github.com/piotrrgw/czuwak/releases/latest/download/czuwak.apk';
                     }
                 }

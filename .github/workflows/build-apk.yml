@@ -37,11 +37,9 @@ jobs:
         run: |
           APP_VERSION=$(node -e 'const fs=require("fs"); const c=fs.readFileSync("www/env.js","utf8"); const m=c.match(/APP_VERSION\s*=\s*"([^"]+)"/); console.log(m?m[1]:"v1.0.0");')
           APP_BUILD=$(node -e 'const fs=require("fs"); const c=fs.readFileSync("www/env.js","utf8"); const m=c.match(/APP_BUILD\s*=\s*"([^"]+)"/); console.log(m?m[1]:"001");')
-          APK_NAME="czuwak(${APP_VERSION})(${APP_BUILD}).apk"
           echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
           echo "app_build=$APP_BUILD" >> $GITHUB_OUTPUT
           echo "tag=${APP_VERSION}-build.${APP_BUILD}" >> $GITHUB_OUTPUT
-          echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
 
       - name: Install dependencies & sync Capacitor
         run: |
@@ -64,17 +62,13 @@ jobs:
 
       - name: Prepare APKs for release
         run: |
-          APK_NAME="${{ steps.version.outputs.apk_name }}"
-          cp android/app/build/outputs/apk/release/app-release.apk "$APK_NAME"
           cp android/app/build/outputs/apk/release/app-release.apk czuwak.apk
 
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: czuwak-apk-${{ steps.version.outputs.tag }}
-          path: |
-            ${{ steps.version.outputs.apk_name }}
-            czuwak.apk
+          path: czuwak.apk
           retention-days: 90
 
       - name: Publish APK to GitHub Releases
@@ -85,13 +79,9 @@ jobs:
           body: |
             Automatyczne wydanie aplikacji **Czuwak – Asystent Drużyn Konduktorskich** (${{ steps.version.outputs.app_version }}, kompilacja `${{ steps.version.outputs.app_build }}`).
             
-            📥 **Bezpośredni link do pobrania pliku z wersją i kompilacją w nazwie:**
-            `https://github.com/${{ github.repository }}/releases/latest/download/${{ steps.version.outputs.apk_name }}`
-            
-            📦 **Stały link uniwersalny:**
+            📦 **Bezpośredni link do pobrania pliku APK:**
             `https://github.com/${{ github.repository }}/releases/latest/download/czuwak.apk`
           files: |
-            ${{ steps.version.outputs.apk_name }}
             czuwak.apk
             www/env.js
           make_latest: true

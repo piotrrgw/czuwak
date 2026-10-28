@@ -59,10 +59,9 @@
 Aplikacja posiada wbudowany system samodzielnych aktualizacji over-the-air:
 1. **Stały klucz podpisu (`android/app/czuwak-release.keystore`):** Każda kompilacja `.apk` jest podpisywana tym samym certyfikatem, dzięki czemu Android pozwala zainstalować nową wersję bezpośrednio na obecną („Aktualizuj”) **bez odinstalowywania i bez utraty pobranych rozkładów czy ustawień**.
 2. **Automatyczne wydania GitHub Releases ([`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml)):**
-   - Po zmianie `APP_VERSION` / `APP_BUILD` w [`www/env.js`](www/env.js) i wypchnięciu kodu na gałąź `main`, GitHub Actions automatycznie buduje podpisany plik `.apk` i publikuje go w formatach:
-     - **Wersjonowany:** `czuwak.v1.2.3.15.apk` oraz `czuwak(v1.2.3)(15).apk`.
-     - **Alias stały:** `czuwak.apk`.
-   - Naprawiono błąd 404: aplikacja dynamicznie odpytuje GitHub API (`/releases/latest`) i pobiera właściwy dostępny asset wydania.
+   - Po zmianie `APP_VERSION` / `APP_BUILD` w [`www/env.js`](www/env.js) i wypchnięciu kodu na gałąź `main`, GitHub Actions automatycznie buduje podpisany plik `.apk` i publikuje go pod stałą, bezpieczną nazwą **`czuwak.apk`**:
+     - **Bezpośredni link do pobrania:** `https://github.com/piotrrgw/czuwak/releases/latest/download/czuwak.apk`.
+   - Zrezygnowano ze zmiennych nazw plików z nawiasami, eliminując błędy 404 i bałagan w pobranych plikach.
 3. **Wykrywanie aktualizacji w aplikacji:**
    - Przy starcie (oraz po kliknięciu **„Sprawdź aktualizację aplikacji (.apk)”** w menu bocznym) Czuwak porównuje swoją wersję z GitHubem. Gdy pojawi się nowsza wersja, wyświetla powiadomienie z możliwością natychmiastowego pobrania i instalacji.
 
